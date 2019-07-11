@@ -19994,6 +19994,8 @@ with pkgs;
 
   couchpotato = callPackage ../servers/couchpotato {};
 
+  cyrus_imapd = callPackage ../servers/mail/cyrus-imapd { };
+
   dendrite = callPackage ../servers/dendrite { };
 
   dex-oidc = callPackage ../servers/dex { };
