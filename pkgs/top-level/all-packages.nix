@@ -24564,6 +24564,8 @@ with pkgs;
 
   wlr-protocols = callPackage ../development/libraries/wlroots/protocols.nix { };
 
+  wslay = callPackage ../development/libraries/wslay { };
+
   wt = wt4;
   inherit (callPackages ../development/libraries/wt {
     boost = boost175;
@@ -25251,6 +25253,8 @@ with pkgs;
   codeowners = callPackage ../development/tools/codeowners { };
 
   couchdb3 = callPackage ../servers/http/couchdb/3.nix { };
+
+  cyrus = callPackage ../servers/mail/cyrus { };
 
   dcnnt = python3Packages.callPackage ../servers/dcnnt { };
 
