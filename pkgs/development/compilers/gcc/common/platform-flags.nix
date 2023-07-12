@@ -1,4 +1,4 @@
-{ lib, targetPlatform }:
+{ lib, targetPlatform, binutils }:
 
 let
   isAarch64Darwin = targetPlatform.isDarwin && targetPlatform.isAarch64;
@@ -7,7 +7,10 @@ let
     // targetPlatform.parsed.abi;
 in lib.concatLists [
   # --with-arch= is unknown flag on x86_64 and aarch64-darwin.
-  (lib.optional (!targetPlatform.isx86_64 && !isAarch64Darwin && p ? arch) "--with-arch=${p.arch}")
+  # p.arch might not be known to the bootstrap binutils.
+  (lib.optional (!targetPlatform.isx86_64 && !isAarch64Darwin && p ? arch
+    && !(binutils.libc.passthru.isFromBootstrapFiles or false))
+    "--with-arch=${p.arch}")
   # --with-cpu on aarch64-darwin fails with "Unknown cpu used in --with-cpu=apple-a13".
   (lib.optional (!isAarch64Darwin && p ? cpu) "--with-cpu=${p.cpu}")
   (lib.optional (p ? abi) "--with-abi=${p.abi}")

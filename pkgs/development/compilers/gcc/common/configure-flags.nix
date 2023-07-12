@@ -217,7 +217,7 @@ let
     ++ lib.optional javaAwtGtk "--enable-java-awt=gtk"
     ++ lib.optional (langJava && javaAntlr != null) "--with-antlr-jar=${javaAntlr}"
 
-    ++ import ../common/platform-flags.nix { inherit (stdenv)  targetPlatform; inherit lib; }
+    ++ import ../common/platform-flags.nix { inherit (stdenv)  targetPlatform; inherit lib binutils; }
     ++ lib.optionals (targetPlatform != hostPlatform) crossConfigureFlags
     ++ lib.optional disableBootstrap' "--disable-bootstrap"
 

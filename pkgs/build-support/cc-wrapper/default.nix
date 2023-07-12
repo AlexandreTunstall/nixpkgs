@@ -120,6 +120,9 @@ let
         znver1         = versionAtLeast ccVersion "6.0";
         znver2         = versionAtLeast ccVersion "9.0";
         znver3         = versionAtLeast ccVersion "11.0";
+        # RISC-V
+        rv64gc_zba_zbb = versionAtLeast ccVersion "12.1";
+        sifive-u74     = versionAtLeast ccVersion "12.1";
       }.${arch} or true
     else if isClang then
       { # Intel
