@@ -17218,6 +17218,9 @@ with pkgs;
     isGNU = cc.isGNU or false;
     isClang = cc.isClang or false;
 
+    shell = runtimeShell;
+    buildPackages = pkgs;
+
     inherit cc bintools libc libcxx extraPackages nixSupport zlib;
   } // extraArgs; in self);
 
@@ -17236,6 +17239,9 @@ with pkgs;
     nativePrefix = stdenv.cc.nativePrefix or "";
 
     noLibc = (self.libc == null);
+
+    shell = runtimeShell;
+    buildPackages = pkgs;
 
     inherit bintools libc;
     inherit (darwin) postLinkSignHook signingUtils;
