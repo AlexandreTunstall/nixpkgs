@@ -1,0 +1,14 @@
+Fix mcabal install ignoring CABALDIR when installing a library
+
+--- a/MicroCabal/src/MicroCabal/Backend/MHS.hs
++++ b/MicroCabal/src/MicroCabal/Backend/MHS.hs
+@@ -177,7 +177,8 @@
+   initDB env
+   let vers = getVersion glob "version"
+       namever = name ++ "-" ++ showVersion vers
++  mhsDir <- getMhsDir env
+-  mhs env $ "-Q " ++ namever ++ ".pkg"
++  mhs env $ "-Q " ++ namever ++ ".pkg " ++ mhsDir
+ 
+ ---
+ -- XXX

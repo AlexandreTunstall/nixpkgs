@@ -1,0 +1,32 @@
+--- a/MicroCabal/src/MicroCabal/Parse.hs
++++ b/MicroCabal/src/MicroCabal/Parse.hs
+@@ -355,20 +355,20 @@ getParser f =
+ parsers :: [(FieldName, P Value)]
+ parsers =
+   [ "asm-options"                    # pVSpace
+-  , "asm-sources"                    # pVComma
++  , "asm-sources"                    # pVOptComma
+   , "autogen-includes"               # pVOptComma
+-  , "autogen-modules"                # pVComma
++  , "autogen-modules"                # pVOptComma
+   , "build-depends"                  # pVLibs
+   , "build-tool-depends"             # pVLibs  -- ??? pVComma -- XXX
+   , "build-tools"                    # pVComma -- XXX
+   , "buildable"                      # (VBool <$> pBool)
+-  , "c-sources"                      # pVComma
+-  , "cc-options"                     # pVComma
+-  , "cmm-sources"                    # pVComma
+-  , "cmm-options"                    # pVComma
+-  , "cpp-options"                    # pVOptComma
+-  , "cxx-options"                    # pVComma
+-  , "default-extensions"             # pVOptComma
++  , "c-sources"                      # pVOptComma
++  , "cc-options"                     # pVSpace
++  , "cmm-sources"                    # pVOptComma
++  , "cmm-options"                    # pVSpace
++  , "cpp-options"                    # pVSpace
++  , "cxx-options"                    # pVSpace
++  , "default-extensions"             # pVSpace
+   , "default-language"               # (VItem <$> pItem)
+   , "exposed-modules"                # pVOptComma
+   , "reexported-modules"             # pVOptComma

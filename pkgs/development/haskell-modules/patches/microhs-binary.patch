@@ -1,0 +1,125 @@
+--- a/binary.cabal
++++ b/binary.cabal
+@@ -51,8 +51,9 @@
+ 
+   other-modules:   Data.Binary.Class,
+                    Data.Binary.Internal,
+-                   Data.Binary.Generic,
+                    Data.Binary.FloatCast
++  if impl(ghc)
++    other-modules: Data.Binary.Generic
+   if impl(ghc <= 7.6)
+     -- prior to ghc-7.4 generics lived in ghc-prim
+     build-depends: ghc-prim
+--- a/src/Data/Binary.hs
++++ b/src/Data/Binary.hs
+@@ -76,7 +76,9 @@
+ import Data.Binary.Class
+ import Data.Binary.Put
+ import Data.Binary.Get
++#if !defined(__MHS__)
+ import Data.Binary.Generic ()
++#endif
+ 
+ import qualified Data.ByteString as B ( hGet, length )
+ import Data.ByteString.Lazy (ByteString)
+--- a/src/Data/Binary/Class.hs
++++ b/src/Data/Binary/Class.hs
+@@ -85,7 +85,7 @@
+ import Data.List    (unfoldr)
+ 
+ -- And needed for the instances:
+-#if MIN_VERSION_base(4,10,0)
++#if defined(__GLASGOW_HASKELL__) && MIN_VERSION_base(4,10,0)
+ import Type.Reflection
+ import Type.Reflection.Unsafe
+ import Data.Kind (Type)
+@@ -103,7 +103,10 @@
+ 
+ import qualified Data.Tree as T
+ 
++import Data.Array
++#if !defined(__MHS__)
+ import Data.Array.Unboxed
++#endif
+ 
+ import GHC.Generics
+ 
+@@ -123,7 +126,9 @@
+ import qualified Data.Sequence as Seq
+ import qualified Data.Foldable as Fold
+ 
++#if defined(__GLASGOW_HASKELL__)
+ import GHC.Fingerprint
++#endif
+ 
+ import Data.Version (Version(..))
+ 
+@@ -168,11 +173,13 @@
+     putList :: [t] -> Put
+     putList = defaultPutList
+ 
++#if !defined(__MHS__)
+     default put :: (Generic t, GBinaryPut (Rep t)) => t -> Put
+     put = gput . from
+ 
+     default get :: (Generic t, GBinaryGet (Rep t)) => Get t
+     get = to `fmap` gget
++#endif
+ 
+ {-# INLINE defaultPutList #-}
+ defaultPutList :: Binary a => [a] -> Put
+@@ -723,6 +730,7 @@
+         xs <- getMany n            -- now the elems.
+         return (listArray bs xs)
+ 
++#if defined(__GLASGOW_HASKELL__)
+ --
+ -- The IArray UArray e constraint is non portable. Requires flexible instances
+ --
+@@ -755,6 +763,7 @@
+ instance Binary Version where
+     put (Version br tags) = put br <> put tags
+     get = Version <$> get <*> get
++#endif
+ 
+ ------------------------------------------------------------------------
+ -- Data.Monoid datatypes
+@@ -825,7 +834,7 @@
+   get = fmap Semigroup.Last get
+   put = put . Semigroup.getLast
+ 
+-#if __GLASGOW_HASKELL__ < 901
++#if defined(__GLASGOW_HASKELL__) && __GLASGOW_HASKELL__ < 901
+ -- | @since 0.8.4.0
+ instance Binary a => Binary (Semigroup.Option a) where
+   get = fmap Semigroup.Option get
+@@ -858,7 +867,7 @@
+ ------------------------------------------------------------------------
+ -- Typeable/Reflection
+ 
+-#if MIN_VERSION_base(4,10,0)
++#if defined(__GLASGOW_HASKELL__) && MIN_VERSION_base(4,10,0)
+ 
+ -- $typeable-instances
+ --
+--- a/src/Data/Binary/FloatCast.hs
++++ b/src/Data/Binary/FloatCast.hs
+@@ -17,7 +17,7 @@
+ 
+   ) where
+ 
+-#if MIN_VERSION_base(4,11,0)
++#if (defined(__GLASGOW_HASKELL__) || defined(__MHS__)) && MIN_VERSION_base(4,11,0)
+ 
+ import Data.Word (Word32, Word64)
+ import GHC.Float (castWord32ToFloat, castFloatToWord32, castWord64ToDouble, castDoubleToWord64)
+@@ -42,7 +42,7 @@
+ import Data.Word (Word32, Word64)
+ import Data.Array.ST (newArray, readArray, MArray, STUArray)
+ import Data.Array.Unsafe (castSTUArray)
+-import GHC.ST (runST, ST)
++import Control.Monad.ST (runST, ST)
+ 
+ floatToWord :: Float -> Word32
+ floatToWord x = runST (cast x)

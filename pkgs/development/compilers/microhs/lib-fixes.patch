@@ -1,0 +1,1562 @@
+diff --git a/lib/Control/Monad.hs b/lib/Control/Monad.hs
+index 8e019adb..1f088eb9 100644
+--- a/lib/Control/Monad.hs
++++ b/lib/Control/Monad.hs
+@@ -13,6 +13,7 @@ module Control.Monad(
+   (=<<),
+   (>=>),
+   (<=<),
++  (<$!>),
+   forever,
+   void,
+   join,
+@@ -44,7 +45,7 @@ import Data.Bool
+ import Data.Char_Type
+ import Data.Function
+ import Data.Functor hiding(unzip)
+-import Data.List
++import Data.List_Type
+ import Data.Monoid.Internal
+ import Data.Ord
+ --import Data.Maybe
+@@ -109,6 +110,12 @@ f <=< g = \ a -> do
+ (>=>) :: forall m a b c . Monad m => (a -> m b) -> (b -> m c) -> (a -> m c)
+ (>=>) = flip (<=<)
+ 
++(<$!>) :: Monad m => (a -> b) -> m a -> m b
++f <$!> m = do
++  x <- m
++  let z = f x
++  z `seq` return z
++
+ forever :: forall f a b . (Applicative f) => f a -> f b
+ forever a = let { a' = a *> a' } in a'
+ 
+@@ -124,6 +131,9 @@ filterM p (x : xs) = liftA2 (\ flg -> if flg then (x:) else id) (p x) (filterM p
+ -- XXX could relax some Monad to Applicative
+ mapAndUnzipM  :: forall m a b c . (Monad m) => (a -> m (b,c)) -> [a] -> m ([b], [c])
+ mapAndUnzipM f xs = unzip <$> mapM f xs
++  where
++    unzip [] = ([], [])
++    unzip ((x, y) : xys) = let (xs, ys) = unzip xys in (x : xs, y : ys)
+ 
+ zipWithM :: forall m a b c . (Monad m) => (a -> b -> m c) -> [a] -> [b] -> m [c]
+ zipWithM f xs ys = sequence (zipWith f xs ys)
+@@ -131,6 +141,9 @@ zipWithM f xs ys = sequence (zipWith f xs ys)
+ zipWithM_ :: forall m a b c . (Monad m) => (a -> b -> m c) -> [a] -> [b] -> m ()
+ zipWithM_ f xs ys = sequence_ (zipWith f xs ys)
+ 
++zipWith f (x:xs) (y:ys) = f x y : zipWith f xs ys
++zipWith _ _ _ = []
++
+ foldM :: forall m a b . (Monad m) => (b -> a -> m b) -> b -> [a] -> m b
+ foldM = foldlM
+ 
+@@ -199,9 +212,6 @@ instance Monad ((->) a) where
+ instance Monad Dual where
+   m >>= k = k (getDual m)
+ 
+-instance Monad [] where
+-  (>>=) = flip concatMap
+-
+ {-
+ -- Same for Maybe
+ instance Functor Maybe where
+@@ -223,10 +233,6 @@ class (Alternative m, Monad m) => MonadPlus m where
+   mplus :: forall a . m a -> m a -> m a
+   mplus = (<|>)
+ 
+-instance MonadPlus [] where
+-  mzero = []
+-  mplus = (++)
+-
+ msum :: forall m a . (MonadPlus m) => [m a] -> m a
+ msum [] = mzero
+ msum (ma:mas) = ma `mplus` msum mas
+diff --git a/lib/Control/Monad/Fail.hs b/lib/Control/Monad/Fail.hs
+index da6e5ff7..2690e343 100644
+--- a/lib/Control/Monad/Fail.hs
++++ b/lib/Control/Monad/Fail.hs
+@@ -10,6 +10,3 @@ import Data.List_Type
+ class Monad m => MonadFail m where
+   fail :: forall a . String -> m a
+   fail = error
+-
+-instance MonadFail [] where
+-  fail _ = []
+diff --git a/lib/Data/ByteString/Builder.hs b/lib/Data/ByteString/Builder.hs
+new file mode 100644
+index 00000000..81d268f1
+--- /dev/null
++++ b/lib/Data/ByteString/Builder.hs
+@@ -0,0 +1,149 @@
++module Data.ByteString.Builder(module Data.ByteString.Builder) where
++import Data.Bits
++import qualified Data.ByteString as B
++import qualified Data.ByteString.Lazy as BL
++import qualified Data.ByteString.Short as BS
++import Data.Coerce
++import Data.Int
++import Data.Monoid.Internal
++import Data.Semigroup
++import Data.String
++import Data.Word
++import System.IO (Handle)
++import Unsafe.Coerce
++
++newtype Builder = Builder { toLazyByteString :: BL.LazyByteString }
++
++instance IsString Builder where
++  fromString = Builder . fromString
++
++instance Semigroup Builder where
++  Builder a <> Builder b = Builder (a <> b)
++
++instance Monoid Builder where
++  mempty = Builder mempty
++
++hPutBuilder :: Handle -> Builder -> IO ()
++hPutBuilder = coerce BL.hPut
++
++writeFile :: FilePath -> Builder -> IO ()
++writeFile = coerce BL.writeFile
++
++byteString :: B.StrictByteString -> Builder
++byteString = coerce
++
++lazyByteString :: BL.LazyByteString -> Builder
++lazyByteString = coerce
++
++shortByteString :: BS.ShortByteString -> Builder
++shortByteString = coerce
++
++int8 :: Int8 -> Builder
++int8 = word8 . unsafeCoerce
++
++word8 :: Word8 -> Builder
++word8 = Builder . BL.pack . pure
++
++int16BE :: Int16 -> Builder
++int16BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 8
++    , x .&. 0xff
++    ]
++
++int32BE :: Int32 -> Builder
++int32BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 24
++    , shiftR x 16 .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , x .&. 0xff
++    ]
++
++int64BE :: Int64 -> Builder
++int64BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 56
++    , shiftR x 48 .&. 0xff
++    , shiftR x 40 .&. 0xff
++    , shiftR x 32 .&. 0xff
++    , shiftR x 24 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , x .&. 0xff
++    ]
++
++word16BE :: Word16 -> Builder
++word16BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 8
++    , x .&. 0xff
++    ]
++
++word32BE :: Word32 -> Builder
++word32BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 24
++    , shiftR x 16 .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , x .&. 0xff
++    ]
++
++word64BE :: Word64 -> Builder
++word64BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 56
++    , shiftR x 48 .&. 0xff
++    , shiftR x 40 .&. 0xff
++    , shiftR x 32 .&. 0xff
++    , shiftR x 24 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , x .&. 0xff
++    ]
++
++int16LE :: Int16 -> Builder
++int16LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8
++    ]
++
++int32LE :: Int32 -> Builder
++int32LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 24
++    ]
++
++int64LE :: Int64 -> Builder
++int64LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 24 .&. 0xff
++    , shiftR x 32 .&. 0xff
++    , shiftR x 40 .&. 0xff
++    , shiftR x 48 .&. 0xff
++    , shiftR x 56
++    ]
++
++word16LE :: Word16 -> Builder
++word16LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8
++    ]
++
++word32LE :: Word32 -> Builder
++word32LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 24
++    ]
++
++word64LE :: Word64 -> Builder
++word64LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 24 .&. 0xff
++    , shiftR x 32 .&. 0xff
++    , shiftR x 40 .&. 0xff
++    , shiftR x 48 .&. 0xff
++    , shiftR x 56
++    ]
+diff --git a/lib/Data/ByteString/Builder/Extra.hs b/lib/Data/ByteString/Builder/Extra.hs
+new file mode 100644
+index 00000000..b92dde7a
+--- /dev/null
++++ b/lib/Data/ByteString/Builder/Extra.hs
+@@ -0,0 +1,5 @@
++module Data.ByteString.Builder.Extra(module Data.ByteString.Builder.Extra) where
++import qualified Data.ByteString.Builder as B
++
++flush :: B.Builder
++flush = mempty
+diff --git a/lib/Data/ByteString/Builder/Prim.hs b/lib/Data/ByteString/Builder/Prim.hs
+new file mode 100644
+index 00000000..50a370f5
+--- /dev/null
++++ b/lib/Data/ByteString/Builder/Prim.hs
+@@ -0,0 +1,112 @@
++module Data.ByteString.Builder.Prim(module Data.ByteString.Builder.Prim) where
++import Data.Bits
++import qualified Data.ByteString.Lazy as BL
++import qualified Data.ByteString.Builder as B
++import Data.Char
++import Data.Coerce
++import Data.Foldable
++import Data.Int
++import Data.Word
++
++class Monoidal f where
++  (>*<) :: f a -> f b -> f (a, b)
++
++instance Monoidal FixedPrim where
++  FixedPrim f >*< FixedPrim g = FixedPrim $ \(x, y) -> f x <> g y
++
++instance Monoidal BoundedPrim where
++  BoundedPrim f >*< BoundedPrim g = BoundedPrim $ \(x, y) -> f x <> g y
++
++newtype BoundedPrim a = BoundedPrim (a -> B.Builder)
++
++primBounded :: BoundedPrim a -> a -> B.Builder
++primBounded (BoundedPrim f) = f
++
++primMapListBounded :: BoundedPrim a -> [a] -> B.Builder
++primMapListBounded (BoundedPrim f) = foldMap f
++
++charUtf8 :: BoundedPrim Char
++charUtf8 = BoundedPrim $ \c
++  -> B.Builder $ BL.pack $ fromIntegral <$> case ord c of
++    x | x <= 0x7f -> [x]
++      | x <= 0x07ff -> [shiftR x 6 + 0xc0, x .&. 0x3f + 0x80]
++      | x <= 0xffff -> [shiftR x 12 + 0xe0, shiftR x 6 .&. 0x3f + 0x80
++        , x .&. 0x3f + 0x80]
++      | otherwise -> [shiftR x 18 + 0xf0, shiftR x 12 .&. 0xf3 + 0x80
++        , shiftR x 6 .&. 0x3f + 0x80, x .&. 0x3f + 0x80]
++
++newtype FixedPrim a = FixedPrim (a -> B.Builder)
++
++primFixed :: FixedPrim a -> a -> B.Builder
++primFixed (FixedPrim f) = f
++
++primMapListFixed :: FixedPrim a -> [a] -> B.Builder
++primMapListFixed (FixedPrim f) = foldMap f
++
++int8 :: FixedPrim Int8
++int8 = FixedPrim B.int8
++
++word8 :: FixedPrim Word8
++word8 = FixedPrim B.word8
++
++int16BE :: FixedPrim Int16
++int16BE = FixedPrim B.int16BE
++
++int32BE :: FixedPrim Int32
++int32BE = FixedPrim B.int32BE
++
++int64BE :: FixedPrim Int64
++int64BE = FixedPrim B.int64BE
++
++word16BE :: FixedPrim Word16
++word16BE = FixedPrim B.word16BE
++
++word32BE :: FixedPrim Word32
++word32BE = FixedPrim B.word32BE
++
++word64BE :: FixedPrim Word64
++word64BE = FixedPrim B.word64BE
++
++int16LE :: FixedPrim Int16
++int16LE = FixedPrim B.int16LE
++
++int32LE :: FixedPrim Int32
++int32LE = FixedPrim B.int32LE
++
++int64LE :: FixedPrim Int64
++int64LE = FixedPrim B.int64LE
++
++word16LE :: FixedPrim Word16
++word16LE = FixedPrim B.word16LE
++
++word32LE :: FixedPrim Word32
++word32LE = FixedPrim B.word32LE
++
++word64LE :: FixedPrim Word64
++word64LE = FixedPrim B.word64LE
++
++-- FIXME: We assume little-endian. This might cause bugs on big-endian hardware.
++
++intHost :: FixedPrim Int
++intHost = coerce int64Host
++
++int16Host :: FixedPrim Int16
++int16Host = int16LE
++
++int32Host :: FixedPrim Int32
++int32Host = int32LE
++
++int64Host :: FixedPrim Int64
++int64Host = int64LE
++
++wordHost :: FixedPrim Word
++wordHost = coerce word64Host
++
++word16Host :: FixedPrim Word16
++word16Host = word16LE
++
++word32Host :: FixedPrim Word32
++word32Host = word32LE
++
++word64Host :: FixedPrim Word64
++word64Host = word64LE
+diff --git a/lib/Data/ByteString/Internal.hs b/lib/Data/ByteString/Internal.hs
+index bf577ba7..34554537 100644
+--- a/lib/Data/ByteString/Internal.hs
++++ b/lib/Data/ByteString/Internal.hs
+@@ -2,6 +2,7 @@ module Data.ByteString.Internal(module Data.ByteString.Internal) where
+ import qualified Prelude(); import MiniPrelude hiding(length)
+ import Control.DeepSeq.Class
+ import Data.Word(Word8)
++import System.IO.Unsafe
+ 
+ data ByteString  -- primitive type
+ 
+@@ -94,3 +95,6 @@ unpack = primBSunpack
+ 
+ null :: ByteString -> Bool
+ null bs = length bs == 0
++
++accursedUnutterablePerformIO :: IO a -> a
++accursedUnutterablePerformIO = unsafePerformIO
+diff --git a/lib/Data/ByteString/Lazy.hs b/lib/Data/ByteString/Lazy.hs
+new file mode 100644
+index 00000000..1940649d
+--- /dev/null
++++ b/lib/Data/ByteString/Lazy.hs
+@@ -0,0 +1,330 @@
++module Data.ByteString.Lazy(module Data.ByteString.Lazy) where
++import qualified Data.ByteString as B
++import Data.Coerce
++import Data.Foldable
++import Data.List.NonEmpty
++import Data.Monoid.Internal
++import Data.Semigroup
++import Data.String
++import Data.Word (Word8)
++import System.IO (Handle)
++
++newtype ByteString = BS B.ByteString
++  deriving (Eq, Ord)
++
++instance IsString ByteString where
++  fromString = BS . fromString
++
++instance Semigroup ByteString where
++  BS a <> BS b = BS (a <> b)
++
++instance Monoid ByteString where
++  mempty = BS mempty
++
++type LazyByteString = ByteString
++
++fromChunks :: [B.StrictByteString] -> ByteString
++fromChunks = foldMap coerce
++
++pack :: [Word8] -> ByteString
++pack = coerce B.pack
++
++cons :: Word8 -> ByteString -> ByteString
++cons = coerce B.cons
++
++snoc :: ByteString -> Word8 -> ByteString
++snoc = coerce B.snoc
++
++head :: ByteString -> Word8
++head = coerce B.head
++
++tail :: ByteString -> ByteString
++tail = coerce B.tail
++
++length :: ByteString -> Int
++length = coerce B.length
++
++uncons :: ByteString -> Maybe (Word8, ByteString)
++uncons = coerce B.uncons
++
++last :: ByteString -> Word8
++last = coerce B.last
++
++init :: ByteString -> ByteString
++init = coerce B.init
++
++unsnoc :: ByteString -> Maybe (ByteString, Word8)
++unsnoc = coerce B.unsnoc
++
++null :: ByteString -> Bool
++null = coerce B.null
++
++map :: (Word8 -> Word8) -> ByteString -> ByteString
++map = coerce B.map
++
++reverse :: ByteString -> ByteString
++reverse = coerce B.reverse
++
++intersperse :: Word8 -> ByteString -> ByteString
++intersperse = coerce B.intersperse
++
++transpose :: [ByteString] -> [ByteString]
++transpose = coerce B.transpose
++
++foldl :: (a -> Word8 -> a) -> a -> ByteString -> a
++foldl f z x = B.foldl (coerce f) z (coerce x)
++
++foldl' :: (a -> Word8 -> a) -> a -> ByteString -> a
++foldl' f z x = B.foldl' (coerce f) z (coerce x)
++
++foldr :: (Word8 -> a -> a) -> a -> ByteString -> a
++foldr f z x = B.foldr (coerce f) z (coerce x)
++
++foldr' :: (Word8 -> a -> a) -> a -> ByteString -> a
++foldr' f z x = B.foldr' (coerce f) z (coerce x)
++
++foldl1 :: (Word8 -> Word8 -> Word8) -> ByteString -> Word8
++foldl1 = coerce B.foldl1
++
++foldl1' :: (Word8 -> Word8 -> Word8) -> ByteString -> Word8
++foldl1' = coerce B.foldl1'
++
++foldr1 :: (Word8 -> Word8 -> Word8) -> ByteString -> Word8
++foldr1 = coerce B.foldr1
++
++foldr1' :: (Word8 -> Word8 -> Word8) -> ByteString -> Word8
++foldr1' = coerce B.foldr1'
++
++concat :: [ByteString] -> ByteString
++concat = coerce B.concat
++
++concatMap :: (Word8 -> ByteString) -> ByteString -> ByteString
++concatMap = coerce B.concatMap
++
++any :: (Word8 -> Bool) -> ByteString -> Bool
++any = coerce B.any
++
++all :: (Word8 -> Bool) -> ByteString -> Bool
++all = coerce B.all
++
++maximum :: ByteString -> Word8
++maximum = coerce B.maximum
++
++minimum :: ByteString -> Word8
++minimum = coerce B.minimum
++
++mapAccumL :: (acc -> Word8 -> (acc, Word8)) -> acc -> ByteString -> (acc, ByteString)
++mapAccumL f s x = coerce (B.mapAccumL (coerce f) s (coerce x))
++
++mapAccumR :: (acc -> Word8 -> (acc, Word8)) -> acc -> ByteString -> (acc, ByteString)
++mapAccumR f s x = coerce (B.mapAccumR (coerce f) s (coerce x))
++
++scanl1 :: (Word8 -> Word8 -> Word8) -> ByteString -> ByteString
++scanl1 = coerce B.scanl1
++
++scanr1 :: (Word8 -> Word8 -> Word8) -> ByteString -> ByteString
++scanr1 = coerce B.scanr1
++
++replicate :: Int -> Word8 -> ByteString
++replicate = coerce B.replicate
++
++unfoldr :: (a -> Maybe (Word8, a)) -> a -> ByteString
++unfoldr f a = coerce (B.unfoldr (coerce f) a)
++
++unfoldrN :: Int -> (a -> Maybe (Word8, a)) -> a -> (ByteString, Maybe a)
++unfoldrN n f a = coerce (B.unfoldrN n (coerce f) a)
++
++take :: Int -> ByteString -> ByteString
++take = coerce B.take
++
++takeEnd :: Int -> ByteString -> ByteString
++takeEnd = coerce B.takeEnd
++
++drop  :: Int -> ByteString -> ByteString
++drop = coerce B.drop
++
++dropEnd :: Int -> ByteString -> ByteString
++dropEnd = coerce B.dropEnd
++
++splitAt :: Int -> ByteString -> (ByteString, ByteString)
++splitAt = coerce B.splitAt
++
++takeWhile :: (Word8 -> Bool) -> ByteString -> ByteString
++takeWhile = coerce B.takeWhile
++
++takeWhileEnd :: (Word8 -> Bool) -> ByteString -> ByteString
++takeWhileEnd = coerce B.takeWhileEnd
++
++dropWhile :: (Word8 -> Bool) -> ByteString -> ByteString
++dropWhile = coerce B.dropWhile
++
++dropWhileEnd :: (Word8 -> Bool) -> ByteString -> ByteString
++dropWhileEnd = coerce B.dropWhileEnd
++
++break :: (Word8 -> Bool) -> ByteString -> (ByteString, ByteString)
++break = coerce B.break
++
++breakEnd :: (Word8 -> Bool) -> ByteString -> (ByteString, ByteString)
++breakEnd = coerce B.breakEnd
++
++span :: (Word8 -> Bool) -> ByteString -> (ByteString, ByteString)
++span = coerce B.span
++
++spanEnd :: (Word8 -> Bool) -> ByteString -> (ByteString, ByteString)
++spanEnd = coerce B.spanEnd
++
++splitWith :: (Word8 -> Bool) -> ByteString -> [ByteString]
++splitWith = coerce B.splitWith
++
++split :: Word8 -> ByteString -> [ByteString]
++split = coerce B.split
++
++group :: ByteString -> [ByteString]
++group = coerce B.group
++
++groupBy :: (Word8 -> Word8 -> Bool) -> ByteString -> [ByteString]
++groupBy = coerce B.groupBy
++
++intercalate :: ByteString -> [ByteString] -> ByteString
++intercalate = coerce B.intercalate
++
++index :: ByteString -> Int -> Word8
++index = coerce B.index
++
++indexMaybe :: ByteString -> Int -> Maybe Word8
++indexMaybe = coerce B.indexMaybe
++
++(!?) :: ByteString -> Int -> Maybe Word8
++(!?) = coerce (B.!?)
++
++elemIndex :: Word8 -> ByteString -> Maybe Int
++elemIndex = coerce B.elemIndex
++
++elemIndexEnd :: Word8 -> ByteString -> Maybe Int
++elemIndexEnd = coerce B.elemIndexEnd
++
++elemIndices :: Word8 -> ByteString -> [Int]
++elemIndices = coerce B.elemIndices
++
++count :: Word8 -> ByteString -> Int
++count = coerce B.count
++
++findIndex :: (Word8 -> Bool) -> ByteString -> Maybe Int
++findIndex = coerce B.findIndex
++
++findIndexEnd :: (Word8 -> Bool) -> ByteString -> Maybe Int
++findIndexEnd = coerce B.findIndexEnd
++
++findIndices :: (Word8 -> Bool) -> ByteString -> [Int]
++findIndices = coerce B.findIndices
++
++elem :: Word8 -> ByteString -> Bool
++elem = coerce B.elem
++
++notElem :: Word8 -> ByteString -> Bool
++notElem = coerce B.notElem
++
++filter :: (Word8 -> Bool) -> ByteString -> ByteString
++filter = coerce B.filter
++
++find :: (Word8 -> Bool) -> ByteString -> Maybe Word8
++find = coerce B.find
++
++partition :: (Word8 -> Bool) -> ByteString -> (ByteString, ByteString)
++partition = coerce B.partition
++
++isPrefixOf :: ByteString -> ByteString -> Bool
++isPrefixOf = coerce B.isPrefixOf
++
++stripPrefix :: ByteString -> ByteString -> Maybe ByteString
++stripPrefix = coerce B.stripPrefix
++
++isSuffixOf :: ByteString -> ByteString -> Bool
++isSuffixOf = coerce B.isSuffixOf
++
++stripSuffix :: ByteString -> ByteString -> Maybe ByteString
++stripSuffix = coerce B.stripSuffix
++
++isInfixOf :: ByteString -> ByteString -> Bool
++isInfixOf = coerce B.isInfixOf
++
++isValidUtf8 :: ByteString -> Bool
++isValidUtf8 = coerce B.isValidUtf8
++
++breakSubstring :: ByteString -> ByteString -> (ByteString,ByteString)
++breakSubstring = coerce B.breakSubstring
++
++zip :: ByteString -> ByteString -> [(Word8,Word8)]
++zip = coerce B.zip
++
++zipWith :: (Word8 -> Word8 -> a) -> ByteString -> ByteString -> [a]
++zipWith f x y = B.zipWith (coerce f) (coerce x) (coerce y)
++
++packZipWith :: (Word8 -> Word8 -> Word8) -> ByteString -> ByteString -> ByteString
++packZipWith = coerce B.packZipWith
++
++unzip :: [(Word8,Word8)] -> (ByteString,ByteString)
++unzip = coerce B.unzip
++
++inits :: ByteString -> [ByteString]
++inits = coerce B.inits
++
++initsNE :: ByteString -> NonEmpty ByteString
++initsNE = coerce B.initsNE
++
++tails :: ByteString -> [ByteString]
++tails = coerce B.tails
++
++tailsNE :: ByteString -> NonEmpty ByteString
++tailsNE = coerce B.tailsNE
++
++sort :: ByteString -> ByteString
++sort = coerce B.sort
++
++copy :: ByteString -> ByteString
++copy = coerce B.copy
++
++getLine :: IO ByteString
++getLine = coerce B.getLine
++
++hGetLine :: Handle -> IO ByteString
++hGetLine = coerce B.hGetLine
++
++hPut :: Handle -> ByteString -> IO ()
++hPut = coerce B.hPut
++
++hPutNonBlocking :: Handle -> ByteString -> IO ByteString
++hPutNonBlocking = coerce B.hPutNonBlocking
++
++hPutStr :: Handle -> ByteString -> IO ()
++hPutStr = coerce B.hPutStr
++
++putStr :: ByteString -> IO ()
++putStr = coerce B.putStr
++
++hGet :: Handle -> Int -> IO ByteString
++hGet = coerce B.hGet
++
++hGetNonBlocking :: Handle -> Int -> IO ByteString
++hGetNonBlocking = coerce B.hGetNonBlocking
++
++hGetSome :: Handle -> Int -> IO ByteString
++hGetSome = coerce B.hGetSome
++
++hGetContents :: Handle -> IO ByteString
++hGetContents = coerce B.hGetContents
++
++getContents :: IO ByteString
++getContents = coerce B.getContents
++
++interact :: (ByteString -> ByteString) -> IO ()
++interact = coerce B.interact
++
++readFile :: FilePath -> IO ByteString
++readFile = coerce B.readFile
++
++writeFile :: FilePath -> ByteString -> IO ()
++writeFile = coerce B.writeFile
++
++appendFile :: FilePath -> ByteString -> IO ()
++appendFile = coerce B.appendFile
+diff --git a/lib/Data/ByteString/Lazy/Char8.hs b/lib/Data/ByteString/Lazy/Char8.hs
+index 9611f7ce..dbf78501 100644
+--- a/lib/Data/ByteString/Lazy/Char8.hs
++++ b/lib/Data/ByteString/Lazy/Char8.hs
+@@ -1,14 +1,12 @@
+-module Data.ByteString.Lazy.Char8(module Data.ByteString.Lazy.Char8) where
++module Data.ByteString.Lazy.Char8(module Data.ByteString.Lazy.Char8, ByteString(..)) where
+ import qualified Data.ByteString as B
++import Data.ByteString.Lazy (ByteString(..))
+ import Data.Coerce
+ import Data.List.NonEmpty
+ import Data.Word(Word8)
+ import Foreign.C.String(CString, CStringLen)
+ import System.IO(Handle)
+ 
+-newtype ByteString = BS B.ByteString
+-  deriving (Eq, Ord)
+-
+ fromFilePath :: FilePath -> IO ByteString
+ fromFilePath = coerce B.fromFilePath
+ 
+diff --git a/lib/Data/ByteString/Lazy/Internal.hs b/lib/Data/ByteString/Lazy/Internal.hs
+new file mode 100644
+index 00000000..a3381c20
+--- /dev/null
++++ b/lib/Data/ByteString/Lazy/Internal.hs
+@@ -0,0 +1,21 @@
++module Data.ByteString.Lazy.Internal(module Data.ByteString.Lazy.Internal) where
++import qualified Data.ByteString as B
++import qualified Data.ByteString.Lazy as BL
++import Data.Coerce
++
++toChunks :: BL.LazyByteString -> [B.StrictByteString]
++toChunks = pure . coerce
++
++pattern Empty :: BL.LazyByteString
++pattern Empty <- (BL.null -> True)
++  where Empty = mempty
++
++pattern Chunk :: B.StrictByteString -> BL.LazyByteString -> BL.LazyByteString
++pattern Chunk b bs <- (toChunks -> b : (BL.fromChunks -> bs))
++  where Chunk = chunk
++
++chunk :: B.StrictByteString -> BL.LazyByteString -> BL.LazyByteString
++chunk b bs = coerce b <> bs
++
++defaultChunkSize :: Int
++defaultChunkSize = 32768
+diff --git a/lib/Data/ByteString/Short.hs b/lib/Data/ByteString/Short.hs
+new file mode 100644
+index 00000000..d55bfc11
+--- /dev/null
++++ b/lib/Data/ByteString/Short.hs
+@@ -0,0 +1,312 @@
++module Data.ByteString.Short(module Data.ByteString.Short) where
++import qualified Data.ByteString as B
++import Data.Coerce
++import Data.List.NonEmpty
++import Data.Word(Word8)
++import System.IO(Handle)
++
++newtype ShortByteString = BS { fromShort :: B.ByteString }
++  deriving (Eq, Ord)
++
++toShort :: B.ByteString -> ShortByteString
++toShort = BS
++
++cons :: Word8 -> ShortByteString -> ShortByteString
++cons = coerce B.cons
++
++snoc :: ShortByteString -> Word8 -> ShortByteString
++snoc = coerce B.snoc
++
++head :: ShortByteString -> Word8
++head = coerce B.head
++
++tail :: ShortByteString -> ShortByteString
++tail = coerce B.tail
++
++length :: ShortByteString -> Int
++length = coerce B.length
++
++uncons :: ShortByteString -> Maybe (Word8, ShortByteString)
++uncons = coerce B.uncons
++
++last :: ShortByteString -> Word8
++last = coerce B.last
++
++init :: ShortByteString -> ShortByteString
++init = coerce B.init
++
++unsnoc :: ShortByteString -> Maybe (ShortByteString, Word8)
++unsnoc = coerce B.unsnoc
++
++null :: ShortByteString -> Bool
++null = coerce B.null
++
++map :: (Word8 -> Word8) -> ShortByteString -> ShortByteString
++map = coerce B.map
++
++reverse :: ShortByteString -> ShortByteString
++reverse = coerce B.reverse
++
++intersperse :: Word8 -> ShortByteString -> ShortByteString
++intersperse = coerce B.intersperse
++
++transpose :: [ShortByteString] -> [ShortByteString]
++transpose = coerce B.transpose
++
++foldl :: (a -> Word8 -> a) -> a -> ShortByteString -> a
++foldl f z x = B.foldl (coerce f) z (coerce x)
++
++foldl' :: (a -> Word8 -> a) -> a -> ShortByteString -> a
++foldl' f z x = B.foldl' (coerce f) z (coerce x)
++
++foldr :: (Word8 -> a -> a) -> a -> ShortByteString -> a
++foldr f z x = B.foldr (coerce f) z (coerce x)
++
++foldr' :: (Word8 -> a -> a) -> a -> ShortByteString -> a
++foldr' f z x = B.foldr' (coerce f) z (coerce x)
++
++foldl1 :: (Word8 -> Word8 -> Word8) -> ShortByteString -> Word8
++foldl1 = coerce B.foldl1
++
++foldl1' :: (Word8 -> Word8 -> Word8) -> ShortByteString -> Word8
++foldl1' = coerce B.foldl1'
++
++foldr1 :: (Word8 -> Word8 -> Word8) -> ShortByteString -> Word8
++foldr1 = coerce B.foldr1
++
++foldr1' :: (Word8 -> Word8 -> Word8) -> ShortByteString -> Word8
++foldr1' = coerce B.foldr1'
++
++concat :: [ShortByteString] -> ShortByteString
++concat = coerce B.concat
++
++concatMap :: (Word8 -> ShortByteString) -> ShortByteString -> ShortByteString
++concatMap = coerce B.concatMap
++
++any :: (Word8 -> Bool) -> ShortByteString -> Bool
++any = coerce B.any
++
++all :: (Word8 -> Bool) -> ShortByteString -> Bool
++all = coerce B.all
++
++maximum :: ShortByteString -> Word8
++maximum = coerce B.maximum
++
++minimum :: ShortByteString -> Word8
++minimum = coerce B.minimum
++
++mapAccumL :: (acc -> Word8 -> (acc, Word8)) -> acc -> ShortByteString -> (acc, ShortByteString)
++mapAccumL f s x = coerce (B.mapAccumL (coerce f) s (coerce x))
++
++mapAccumR :: (acc -> Word8 -> (acc, Word8)) -> acc -> ShortByteString -> (acc, ShortByteString)
++mapAccumR f s x = coerce (B.mapAccumR (coerce f) s (coerce x))
++
++scanl1 :: (Word8 -> Word8 -> Word8) -> ShortByteString -> ShortByteString
++scanl1 = coerce B.scanl1
++
++scanr1 :: (Word8 -> Word8 -> Word8) -> ShortByteString -> ShortByteString
++scanr1 = coerce B.scanr1
++
++replicate :: Int -> Word8 -> ShortByteString
++replicate = coerce B.replicate
++
++unfoldr :: (a -> Maybe (Word8, a)) -> a -> ShortByteString
++unfoldr f a = coerce (B.unfoldr (coerce f) a)
++
++unfoldrN :: Int -> (a -> Maybe (Word8, a)) -> a -> (ShortByteString, Maybe a)
++unfoldrN n f a = coerce (B.unfoldrN n (coerce f) a)
++
++take :: Int -> ShortByteString -> ShortByteString
++take = coerce B.take
++
++takeEnd :: Int -> ShortByteString -> ShortByteString
++takeEnd = coerce B.takeEnd
++
++drop  :: Int -> ShortByteString -> ShortByteString
++drop = coerce B.drop
++
++dropEnd :: Int -> ShortByteString -> ShortByteString
++dropEnd = coerce B.dropEnd
++
++splitAt :: Int -> ShortByteString -> (ShortByteString, ShortByteString)
++splitAt = coerce B.splitAt
++
++takeWhile :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++takeWhile = coerce B.takeWhile
++
++takeWhileEnd :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++takeWhileEnd = coerce B.takeWhileEnd
++
++dropWhile :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++dropWhile = coerce B.dropWhile
++
++dropWhileEnd :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++dropWhileEnd = coerce B.dropWhileEnd
++
++break :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++break = coerce B.break
++
++breakEnd :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++breakEnd = coerce B.breakEnd
++
++span :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++span = coerce B.span
++
++spanEnd :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++spanEnd = coerce B.spanEnd
++
++splitWith :: (Word8 -> Bool) -> ShortByteString -> [ShortByteString]
++splitWith = coerce B.splitWith
++
++split :: Word8 -> ShortByteString -> [ShortByteString]
++split = coerce B.split
++
++group :: ShortByteString -> [ShortByteString]
++group = coerce B.group
++
++groupBy :: (Word8 -> Word8 -> Bool) -> ShortByteString -> [ShortByteString]
++groupBy = coerce B.groupBy
++
++intercalate :: ShortByteString -> [ShortByteString] -> ShortByteString
++intercalate = coerce B.intercalate
++
++index :: ShortByteString -> Int -> Word8
++index = coerce B.index
++
++indexMaybe :: ShortByteString -> Int -> Maybe Word8
++indexMaybe = coerce B.indexMaybe
++
++(!?) :: ShortByteString -> Int -> Maybe Word8
++(!?) = coerce (B.!?)
++
++elemIndex :: Word8 -> ShortByteString -> Maybe Int
++elemIndex = coerce B.elemIndex
++
++elemIndexEnd :: Word8 -> ShortByteString -> Maybe Int
++elemIndexEnd = coerce B.elemIndexEnd
++
++elemIndices :: Word8 -> ShortByteString -> [Int]
++elemIndices = coerce B.elemIndices
++
++count :: Word8 -> ShortByteString -> Int
++count = coerce B.count
++
++findIndex :: (Word8 -> Bool) -> ShortByteString -> Maybe Int
++findIndex = coerce B.findIndex
++
++findIndexEnd :: (Word8 -> Bool) -> ShortByteString -> Maybe Int
++findIndexEnd = coerce B.findIndexEnd
++
++findIndices :: (Word8 -> Bool) -> ShortByteString -> [Int]
++findIndices = coerce B.findIndices
++
++elem :: Word8 -> ShortByteString -> Bool
++elem = coerce B.elem
++
++notElem :: Word8 -> ShortByteString -> Bool
++notElem = coerce B.notElem
++
++filter :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++filter = coerce B.filter
++
++find :: (Word8 -> Bool) -> ShortByteString -> Maybe Word8
++find = coerce B.find
++
++partition :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++partition = coerce B.partition
++
++isPrefixOf :: ShortByteString -> ShortByteString -> Bool
++isPrefixOf = coerce B.isPrefixOf
++
++stripPrefix :: ShortByteString -> ShortByteString -> Maybe ShortByteString
++stripPrefix = coerce B.stripPrefix
++
++isSuffixOf :: ShortByteString -> ShortByteString -> Bool
++isSuffixOf = coerce B.isSuffixOf
++
++stripSuffix :: ShortByteString -> ShortByteString -> Maybe ShortByteString
++stripSuffix = coerce B.stripSuffix
++
++isInfixOf :: ShortByteString -> ShortByteString -> Bool
++isInfixOf = coerce B.isInfixOf
++
++isValidUtf8 :: ShortByteString -> Bool
++isValidUtf8 = coerce B.isValidUtf8
++
++breakSubstring :: ShortByteString -> ShortByteString -> (ShortByteString,ShortByteString)
++breakSubstring = coerce B.breakSubstring
++
++zip :: ShortByteString -> ShortByteString -> [(Word8,Word8)]
++zip = coerce B.zip
++
++zipWith :: (Word8 -> Word8 -> a) -> ShortByteString -> ShortByteString -> [a]
++zipWith f x y = B.zipWith (coerce f) (coerce x) (coerce y)
++
++packZipWith :: (Word8 -> Word8 -> Word8) -> ShortByteString -> ShortByteString -> ShortByteString
++packZipWith = coerce B.packZipWith
++
++unzip :: [(Word8,Word8)] -> (ShortByteString,ShortByteString)
++unzip = coerce B.unzip
++
++inits :: ShortByteString -> [ShortByteString]
++inits = coerce B.inits
++
++initsNE :: ShortByteString -> NonEmpty ShortByteString
++initsNE = coerce B.initsNE
++
++tails :: ShortByteString -> [ShortByteString]
++tails = coerce B.tails
++
++tailsNE :: ShortByteString -> NonEmpty ShortByteString
++tailsNE = coerce B.tailsNE
++
++sort :: ShortByteString -> ShortByteString
++sort = coerce B.sort
++
++copy :: ShortByteString -> ShortByteString
++copy = coerce B.copy
++
++getLine :: IO ShortByteString
++getLine = coerce B.getLine
++
++hGetLine :: Handle -> IO ShortByteString
++hGetLine = coerce B.hGetLine
++
++hPut :: Handle -> ShortByteString -> IO ()
++hPut = coerce B.hPut
++
++hPutNonBlocking :: Handle -> ShortByteString -> IO ShortByteString
++hPutNonBlocking = coerce B.hPutNonBlocking
++
++hPutStr :: Handle -> ShortByteString -> IO ()
++hPutStr = coerce B.hPutStr
++
++putStr :: ShortByteString -> IO ()
++putStr = coerce B.putStr
++
++hGet :: Handle -> Int -> IO ShortByteString
++hGet = coerce B.hGet
++
++hGetNonBlocking :: Handle -> Int -> IO ShortByteString
++hGetNonBlocking = coerce B.hGetNonBlocking
++
++hGetSome :: Handle -> Int -> IO ShortByteString
++hGetSome = coerce B.hGetSome
++
++hGetContents :: Handle -> IO ShortByteString
++hGetContents = coerce B.hGetContents
++
++getContents :: IO ShortByteString
++getContents = coerce B.getContents
++
++interact :: (ShortByteString -> ShortByteString) -> IO ()
++interact = coerce B.interact
++
++readFile :: FilePath -> IO ShortByteString
++readFile = coerce B.readFile
++
++writeFile :: FilePath -> ShortByteString -> IO ()
++writeFile = coerce B.writeFile
++
++appendFile :: FilePath -> ShortByteString -> IO ()
++appendFile = coerce B.appendFile
+diff --git a/lib/Data/ByteString/Unsafe.hs b/lib/Data/ByteString/Unsafe.hs
+new file mode 100644
+index 00000000..4da1cc78
+--- /dev/null
++++ b/lib/Data/ByteString/Unsafe.hs
+@@ -0,0 +1,22 @@
++module Data.ByteString.Unsafe(module Data.ByteString.Unsafe) where
++import qualified Data.ByteString as B
++import Data.Word
++import Foreign.C.String (CString, CStringLen)
++
++unsafeHead :: B.ByteString -> Word8
++unsafeHead = B.head
++
++unsafeIndex :: B.ByteString -> Int -> Word8
++unsafeIndex = B.index
++
++unsafeTake :: Int -> B.ByteString -> B.ByteString
++unsafeTake = B.take
++
++unsafeDrop :: Int -> B.ByteString -> B.ByteString
++unsafeDrop = B.drop
++
++unsafeUseAsCString :: B.ByteString -> (CString -> IO a) -> IO a
++unsafeUseAsCString = B.useAsCString
++
++unsafeUseAsCStringLen :: B.ByteString -> (CStringLen -> IO a) -> IO a
++unsafeUseAsCStringLen = B.useAsCStringLen
+diff --git a/lib/Data/Foldable.hs b/lib/Data/Foldable.hs
+index 59e94e0b..45e7220c 100644
+--- a/lib/Data/Foldable.hs
++++ b/lib/Data/Foldable.hs
+@@ -54,7 +54,6 @@ import Data.Function
+ import Data.Functor.Const
+ import Data.Functor.Identity
+ import Data.List_Type hiding (concatMap)
+-import qualified Data.List as List
+ import Data.Maybe
+ import Data.Monoid
+ import Data.Monoid.Internal hiding (Max(..), Min(..))
+@@ -146,22 +145,49 @@ instance Foldable Maybe where
+     foldl f z (Just x) = f z x
+ 
+ instance Foldable [] where
+-    elem    = List.elem
+-    foldl   = List.foldl
+-    foldl'  = List.foldl'
+-    foldl1  = List.foldl1
+-    foldr   = List.foldr
+-    --foldr'  = List.foldr'
+-    foldr1  = List.foldr1
+-    foldMap = (mconcat .) . List.map
+-    fold    = mconcat
+-    length  = List.length
+-    maximum = List.maximum
+-    minimum = List.minimum
+-    null    = List.null
+-    product = List.product
+-    sum     = List.sum
+-    toList  = id
++    elem a = any (a ==)
++
++    foldl _ z [] = z
++    foldl f z (x : xs) = foldl f (f z x) xs
++
++    foldl' _ z [] = z
++    foldl' f z (x : xs) =
++      let y = f z x
++      in  y `seq` foldl' f y xs
++
++    foldl1 _ [] = error "foldl1: empty list"
++    foldl1 f (x : xs) = foldl f x xs
++
++    foldr _ z [] = z
++    foldr f z (x : xs) = f x (foldr f z xs)
++
++    foldr1 _ [] = error "foldr1: empty list"
++    foldr1 _ [x] = x
++    foldr1 f (x : xs) = f x (foldr1 f xs)
++
++    fold = mconcat
++
++    length =
++      -- Make it tail recursive and strict
++      let
++        rec r [] = r
++        rec r (_:xs) =
++              let r' = r + (1::Int)
++              in  r' `primSeq` rec r' xs
++      in rec (0::Int)
++
++    maximum [] = error "maximum: empty list"
++    maximum (x:ys) = foldr (\ y m -> if y > m then y else m) x ys
++
++    minimum [] = error "minimum: empty list"
++    minimum (x:ys) = foldr (\ y m -> if y < m then y else m) x ys
++
++    null [] = True
++    null _  = False
++
++    product = foldr (*) 1
++    sum = foldr (+) 0
++    toList = id
+ 
+ instance Foldable (Either a) where
+     foldMap _ (Left _) = mempty
+diff --git a/lib/Data/Foldable/Internal.hs b/lib/Data/Foldable/Internal.hs
+index 8703de88..3084ff05 100644
+--- a/lib/Data/Foldable/Internal.hs
++++ b/lib/Data/Foldable/Internal.hs
+@@ -5,9 +5,9 @@ import Control.Monad
+ import Data.Bool
+ import Data.Function
+ import Data.Functor
++import Data.List_Type
+ import Data.Maybe_Type
+ import Data.Monoid.Internal hiding (Max(..), Min(..))
+-import Data.List
+ import Data.Ord
+ 
+ newtype Max a = Max (Maybe a)
+@@ -40,6 +40,12 @@ instance forall a . Ord a => Monoid (Min a) where
+     mempty = Min Nothing
+     mconcat = foldl' (<>) mempty
+ 
++foldl' :: forall a b . (b -> a -> b) -> b -> [a] -> b
++foldl' _ z [] = z
++foldl' f z (x : xs) =
++  let y = f z x
++  in  y `seq` foldl' f y xs
++
+ newtype StateL s a = StateL (s -> (s, a))
+ runStateL :: StateL s a -> s -> (s, a)
+ runStateL (StateL f) = f
+diff --git a/lib/Data/List.hs b/lib/Data/List.hs
+index a406d3fc..ce22bf79 100644
+--- a/lib/Data/List.hs
++++ b/lib/Data/List.hs
+@@ -31,14 +31,17 @@ import qualified Prelude()              -- do not import Prelude
+ import Primitives
+ import Control.Applicative
+ import Control.Error
++import Control.Monad
++import Control.Monad.Fail
+ import Data.Bool
+ import Data.Char
+ import Data.Eq
++import Data.Foldable
+ import Data.Function
+ import Data.Functor hiding(unzip)
+ import Data.Int
+ import Data.Integral
+-import Data.List_Type
++import Data.List_Type hiding(concatMap)
+ import Data.Maybe_Type
+ import Data.Monoid.Internal
+ import Data.Num
+@@ -70,6 +73,16 @@ instance Applicative [] where
+   xs *> ys = concatMap (\_ -> ys) xs
+   liftA2 f xs ys = concatMap (\x -> map (f x) ys) xs
+ 
++instance Monad [] where
++  (>>=) = flip concatMap
++
++instance MonadFail [] where
++  fail _ = []
++
++instance MonadPlus [] where
++  mzero = []
++  mplus = (++)
++
+ instance Show a => Show [a] where
+   showsPrec _ = showList
+ 
+@@ -90,10 +103,6 @@ instance Monoid [a] where
+   mempty = []
+   mconcat = concat
+ 
+-null :: forall a . [a] -> Bool
+-null [] = True
+-null _  = False
+-
+ concat :: forall a . [[a]] -> [a]
+ concat = foldr (++) []
+ 
+@@ -105,21 +114,12 @@ filter :: forall a . (a -> Bool) -> [a] -> [a]
+ filter _ [] = []
+ filter p (x : xs) = if p x then x : filter p xs else filter p xs
+ 
+-foldr :: forall a b . (a -> b -> b) -> b -> [a] -> b
+-foldr _ z [] = z
+-foldr f z (x : xs) = f x (foldr f z xs)
+-
+ foldr' :: forall a b . (a -> b -> b) -> b -> [a] -> b
+ foldr' f z [] = z
+ foldr' f z (x:xs) =
+   let y = foldr' f z xs
+   in  y `seq` f x y
+ 
+-foldr1 :: forall a . (a -> a -> a) -> [a] -> a
+-foldr1 _ [] = error "foldr1: empty list"
+-foldr1 _ [x] = x
+-foldr1 f (x : xs) = f x (foldr1 f xs)
+-
+ foldr1' :: forall a . (a -> a -> a) -> [a] -> a
+ foldr1' f [] = error "foldr1: empty list"
+ foldr1' _ [x] = x
+@@ -127,38 +127,10 @@ foldr1' f (x : xs) =
+   let y = foldr1' f xs
+   in  y `seq` f x y
+ 
+-foldl :: forall a b . (b -> a -> b) -> b -> [a] -> b
+-foldl _ z [] = z
+-foldl f z (x : xs) = foldl f (f z x) xs
+-
+-foldl' :: forall a b . (b -> a -> b) -> b -> [a] -> b
+-foldl' _ z [] = z
+-foldl' f z (x : xs) =
+-  let y = f z x
+-  in  y `seq` foldl' f y xs
+-
+-foldl1 :: forall a . (a -> a -> a) -> [a] -> a
+-foldl1 _ [] = error "foldl1: empty list"
+-foldl1 f (x : xs) = foldl f x xs
+-
+ foldl1' :: forall a . (a -> a -> a) -> [a] -> a
+ foldl1' _ [] = error "foldl1': empty list"
+ foldl1' f (x : xs) = foldl' f x xs
+ 
+-minimum :: forall a . Ord a => [a] -> a
+-minimum [] = error "minimum: empty list"
+-minimum (x:ys) = foldr (\ y m -> if y < m then y else m) x ys
+-
+-maximum :: forall a . Ord a => [a] -> a
+-maximum [] = error "maximum: empty list"
+-maximum (x:ys) = foldr (\ y m -> if y > m then y else m) x ys
+-
+-sum :: forall a . Num a => [a] -> a
+-sum = foldr (+) 0
+-
+-product :: forall a . Num a => [a] -> a
+-product = foldr (*) 1
+-
+ and :: [Bool] -> Bool
+ and = foldr (&&) True
+ 
+@@ -189,16 +161,6 @@ drop n arg =
+       [] -> []
+       _ : xs -> drop (n - (1::Int)) xs
+ 
+-length :: forall a . [a] -> Int
+-length =
+-  -- Make it tail recursive and strict
+-  let
+-    rec r [] = r
+-    rec r (_:xs) =
+-          let r' = r + (1::Int)
+-          in  r' `primSeq` rec r' xs
+-  in rec (0::Int)
+-
+ zip :: forall a b . [a] -> [b] -> [(a, b)]
+ zip = zipWith (\ x y -> (x, y))
+ 
+@@ -411,12 +373,6 @@ intersperse sep (a:as) = a : prepend as
+ intercalate :: forall a . [a] -> [[a]] -> [a]
+ intercalate xs xss = concat (intersperse xs xss)
+ 
+-elem :: forall a . (Eq a) => a -> [a] -> Bool
+-elem a = any (a ==)
+-
+-notElem :: forall a . (Eq a) => a -> [a] -> Bool
+-notElem a as = not (elem a as)
+-
+ find :: forall a . (a -> Bool) -> [a] -> Maybe a
+ find p [] = Nothing
+ find p (x:xs) = if p x then Just x else find p xs
+diff --git a/lib/Data/Maybe.hs b/lib/Data/Maybe.hs
+index 1eba9c2e..819b1d98 100644
+--- a/lib/Data/Maybe.hs
++++ b/lib/Data/Maybe.hs
+@@ -13,7 +13,7 @@ import Data.Eq
+ import Data.Function
+ import Data.Functor
+ import Data.Int
+-import Data.List
++import Data.List_Type
+ import Data.Maybe_Type
+ import Data.Monoid.Internal
+ import Data.Ord
+diff --git a/lib/Data/Monoid/Internal.hs b/lib/Data/Monoid/Internal.hs
+index 452d23b0..3377cc58 100644
+--- a/lib/Data/Monoid/Internal.hs
++++ b/lib/Data/Monoid/Internal.hs
+@@ -167,10 +167,8 @@ instance Ord a => Ord (Arg a b) where
+ 
+ ----------------------
+ 
+-newtype Alt f a = Alt (f a)
++newtype Alt f a = Alt { getAlt :: f a }
+ --  deriving (Show)
+-getAlt :: Alt f a -> f a
+-getAlt (Alt x) = x
+ {-
+   deriving ( Generic     -- ^ @since base-4.8.0.0
+            , Generic1    -- ^ @since base-4.8.0.0
+diff --git a/lib/Data/Semigroup.hs b/lib/Data/Semigroup.hs
+index d1288234..f54c280c 100644
+--- a/lib/Data/Semigroup.hs
++++ b/lib/Data/Semigroup.hs
+@@ -1,5 +1,6 @@
+ module Data.Semigroup(
+   Semigroup(..),
++  WrappedMonoid(..),
+   Endo(..),
+   Dual(..),
+   Max(..),
+@@ -27,6 +28,14 @@ import Data.Monoid.Internal
+ import Data.Records
+ import Text.Show
+ 
++newtype WrappedMonoid a = WrapMonoid { unwrapMonoid :: a }
++
++instance Monoid a => Semigroup (WrappedMonoid a) where
++  WrapMonoid a <> WrapMonoid b = WrapMonoid (a <> b)
++
++instance Monoid a => Monoid (WrappedMonoid a) where
++  mempty = WrapMonoid mempty
++
+ {-
+ newtype First a = First { getFirst :: a }
+   deriving ( Bounded  -- ^ @since 4.9.0.0
+diff --git a/lib/GHC/Float.hs b/lib/GHC/Float.hs
+new file mode 100644
+index 00000000..fa40054a
+--- /dev/null
++++ b/lib/GHC/Float.hs
+@@ -0,0 +1,19 @@
++module GHC.Float(module GHC.Float) where
++import Primitives
++import Data.Coerce
++import Data.Double
++import Data.Float
++import Data.Word
++import Unsafe.Coerce
++
++castFloatToWord32 :: Float -> Word32
++castFloatToWord32 = coerce (unsafeCoerce :: FloatW -> Word)
++
++castWord32ToFloat :: Word32 -> Float
++castWord32ToFloat = coerce (unsafeCoerce :: Word -> FloatW)
++
++castDoubleToWord64 :: Double -> Word64
++castDoubleToWord64 = coerce (unsafeCoerce :: FloatW -> Word)
++
++castWord64ToDouble :: Word64 -> Double
++castWord64ToDouble = coerce (unsafeCoerce :: Word -> FloatW)
+diff --git a/lib/Numeric/Natural.hs b/lib/Numeric/Natural.hs
+index 5c18948f..c9cef8d3 100644
+--- a/lib/Numeric/Natural.hs
++++ b/lib/Numeric/Natural.hs
+@@ -3,6 +3,7 @@ module Numeric.Natural
+   , minusNaturalMaybe
+   ) where
+ import qualified Prelude(); import MiniPrelude
++import Data.Bits
+ import Data.Coerce
+ import Data.Integer
+ import Data.Real
+@@ -36,6 +37,25 @@ instance Enum Natural where
+   enumFromTo = coerce (enumFromTo @Integer)
+   enumFromThenTo = coerce (enumFromThenTo @Integer)
+ 
++instance Bits Natural where
++  N a .&. N b = N (a .&. b)
++  N a .|. N b = N (a .|. b)
++  N a `xor` N b = N (xor a b)
++  complement (N a)
++    | a == 0 = N a
++    | otherwise = throw Underflow
++  unsafeShiftL (N a) i = N (unsafeShiftL a i)
++  shiftL (N a) i = N (shiftL a i)
++  unsafeShiftR (N a) i = N (unsafeShiftR a i)
++  shiftR (N a) i = N (shiftR a i)
++  shift (N a) i = N (shift a i)
++  rotate (N a) i = N (rotate a i)
++  bit = N . bit
++  testBit (N a) = testBit a
++  zeroBits = N zeroBits
++  bitSizeMaybe _ = Nothing
++  popCount (N a) = popCount a
++
+ instance Integral Natural where
+   toInteger (N i) = i
+   quotRem (N x) (N y) = (N q, N r) where (q, r) = quotRem x y
+diff --git a/lib/System/IO.hs b/lib/System/IO.hs
+index 1a7cf556..a21fdafa 100644
+--- a/lib/System/IO.hs
++++ b/lib/System/IO.hs
+@@ -23,7 +23,7 @@ module System.IO(
+ 
+   openTmpFile, openTempFile, openBinaryTempFile,
+ 
+-  withFile,
++  withFile, withBinaryFile,
+ 
+   BufferMode(..),
+   hSetBuffering,
+@@ -289,6 +289,13 @@ withFile fn md io = do
+   hClose h
+   return r
+ 
++withBinaryFile :: FilePath -> IOMode -> (Handle -> IO r) -> IO r
++withBinaryFile fn md io = do
++  h <- openBinaryFile fn md
++  r <- io h
++  hClose h
++  return r
++
+ --------
+ 
+ splitTmp :: String -> (String, String)
+diff --git a/lib/Text/Read/Lex.hs b/lib/Text/Read/Lex.hs
+index de6cd912..439b52b2 100644
+--- a/lib/Text/Read/Lex.hs
++++ b/lib/Text/Read/Lex.hs
+@@ -211,7 +211,7 @@ lexPunc =
+ 
+ -- | The @special@ character class as defined in the Haskell Report.
+ isPuncChar :: Char -> Bool
+-isPuncChar c = c `elem` ",;()[]{}`"
++isPuncChar c = c `elem` (",;()[]{}`"::String)
+ 
+ -- ----------------------------------------------------------------------
+ -- Symbols
+@@ -251,7 +251,7 @@ lexId = do c <- satisfy isIdsChar
+   where
+           -- Identifiers can start with a '_'
+     isIdsChar c = isAlpha c || c == '_'
+-    isIdfChar c = isAlphaNum c || c `elem` "_'"
++    isIdfChar c = isAlphaNum c || c `elem` ("_'"::String)
+ 
+ -- ---------------------------------------------------------------------------
+ -- Lexing character literals
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index 594db737..5094e650 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -43,8 +43,15 @@ library base
+         Data.Bool
+         Data.Bounded
+         Data.ByteString
++        Data.ByteString.Builder
++        Data.ByteString.Builder.Extra
++        Data.ByteString.Builder.Prim
+         Data.ByteString.Char8
++        Data.ByteString.Lazy
+         Data.ByteString.Lazy.Char8
++        Data.ByteString.Lazy.Internal
++        Data.ByteString.Short
++        Data.ByteString.Unsafe
+         Data.Char
+         Data.Coerce
+         Data.Complex
+@@ -122,6 +129,7 @@ library base
+         Foreign.Marshal.Utils
+         Foreign.Ptr
+         Foreign.Storable
++        GHC.Float
+         GHC.Generics
+         GHC.Stack
+         GHC.Types
