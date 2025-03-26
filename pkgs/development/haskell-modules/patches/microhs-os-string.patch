@@ -1,0 +1,619 @@
+diff --git a/System/OsString/Common.hs b/System/OsString/Common.hs
+index 9916acc..31fc922 100644
+--- a/System/OsString/Common.hs
++++ b/System/OsString/Common.hs
+@@ -29,9 +29,11 @@ module System.OsString.MODULE_NAME
+ #endif
+ 
+   -- * String construction
++#if !defined(__MHS__)
+   , encodeUtf
+   , unsafeEncodeUtf
+   , encodeWith
++#endif
+   , encodeFS
+   , encodeLE
+ #ifdef WINDOWS
+@@ -47,8 +49,10 @@ module System.OsString.MODULE_NAME
+   , pack
+ 
+   -- * String deconstruction
++#if !defined(__MHS__)
+   , decodeUtf
+   , decodeWith
++#endif
+   , decodeFS
+   , decodeLE
+   , unpack
+@@ -152,6 +156,8 @@ import System.OsString.Internal.Types (
+ #endif
+   )
+ 
++import Control.Exception
++    ( evaluate )
+ import Data.Coerce
+ import Data.Char
+ import Control.Monad.Catch
+@@ -162,37 +168,50 @@ import Control.Exception
+     ( SomeException, try, displayException )
+ import Control.DeepSeq ( force )
+ import Data.Bifunctor ( first )
+-import GHC.IO
+-    ( evaluate, unsafePerformIO )
+-import qualified GHC.Foreign as GHC
++import System.IO.Unsafe
++    ( unsafePerformIO )
++#if defined(__GLASGOW_HASKELL__)
++import qualified GHC.Foreign as Foreign
++#else
++import qualified Foreign.C.String as Foreign
++#endif
++#if !defined(__MHS__)
+ import Language.Haskell.TH.Quote
+     ( QuasiQuoter (..) )
+ import Language.Haskell.TH.Syntax
+     ( Lift (..), lift )
++#endif
+ 
+ 
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.Failure ( CodingFailureMode(..) )
++import System.IO ( TextEncoding )
++#endif
+ #ifdef WINDOWS
+ import System.OsString.Encoding
+ import System.IO
+-    ( TextEncoding, utf16le )
++    ( utf16le )
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.UTF16 ( mkUTF16le )
++#endif
+ import qualified System.OsString.Data.ByteString.Short.Word16 as BSP
+ #else
+ import System.OsString.Encoding
+ import System.IO
+-    ( TextEncoding, utf8 )
++    ( utf8 )
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.UTF8 ( mkUTF8 )
++#endif
+ import qualified System.OsString.Data.ByteString.Short as BSP
+ #endif
+ import GHC.Stack (HasCallStack)
+ import Prelude (Bool(..), Int, Maybe(..), IO, String, Either(..), fmap, ($), (.), mconcat, fromEnum, fromInteger, mempty, fromIntegral, fail, (<$>), show, either, pure, const, flip, error, id)
+ import Data.Bifunctor ( bimap )
+-import qualified System.OsString.Data.ByteString.Short.Word16 as BS16
+ import qualified System.OsString.Data.ByteString.Short as BS8
+ 
+ 
+ 
++#if !defined(__MHS__)
+ #ifdef WINDOWS_DOC
+ -- | Partial unicode friendly encoding.
+ --
+@@ -236,7 +255,7 @@ encodeWith :: TextEncoding  -- ^ text encoding (wide char)
+            -> String
+            -> Either EncodingException PLATFORM_STRING
+ encodeWith enc str = unsafePerformIO $ do
+-  r <- try @SomeException $ GHC.withCStringLen enc str $ \cstr -> WindowsString <$> BS8.packCStringLen cstr
++  r <- try @SomeException $ Foreign.withCStringLen enc str $ \cstr -> WindowsString <$> BS8.packCStringLen cstr
+   evaluate $ force $ first (flip EncodingError Nothing . displayException) r
+ #else
+ -- | Encode a 'String' with the specified encoding.
+@@ -244,9 +263,10 @@ encodeWith :: TextEncoding
+            -> String
+            -> Either EncodingException PLATFORM_STRING
+ encodeWith enc str = unsafePerformIO $ do
+-  r <- try @SomeException $ GHC.withCStringLen enc str $ \cstr -> PosixString <$> BSP.packCStringLen cstr
++  r <- try @SomeException $ Foreign.withCStringLen enc str $ \cstr -> PosixString <$> BSP.packCStringLen cstr
+   evaluate $ force $ first (flip EncodingError Nothing . displayException) r
+ #endif
++#endif
+ 
+ #ifdef WINDOWS_DOC
+ -- | This mimics the behavior of the base library when doing filesystem
+@@ -311,6 +331,7 @@ fromString :: String -> WindowsString
+ fromString = unsafePerformIO . fmap WindowsString . encodeWithBaseWindows
+ #endif
+ 
++#if !defined(__MHS__)
+ #ifdef WINDOWS_DOC
+ -- | Partial unicode friendly decoding.
+ --
+@@ -340,7 +361,7 @@ decodeWith :: TextEncoding
+            -> PLATFORM_STRING
+            -> Either EncodingException String
+ decodeWith winEnc (WindowsString ba) = unsafePerformIO $ do
+-  r <- try @SomeException $ BS8.useAsCStringLen ba $ \fp -> GHC.peekCStringLen winEnc fp
++  r <- try @SomeException $ BS8.useAsCStringLen ba $ \fp -> Foreign.peekCStringLen winEnc fp
+   evaluate $ force $ first (flip EncodingError Nothing . displayException) r
+ #else
+ -- | Decode a 'PosixString' with the specified encoding.
+@@ -350,9 +371,10 @@ decodeWith :: TextEncoding
+        -> PLATFORM_STRING
+        -> Either EncodingException String
+ decodeWith unixEnc (PosixString ba) = unsafePerformIO $ do
+-  r <- try @SomeException $ BSP.useAsCStringLen ba $ \fp -> GHC.peekCStringLen unixEnc fp
++  r <- try @SomeException $ BSP.useAsCStringLen ba $ \fp -> Foreign.peekCStringLen unixEnc fp
+   evaluate $ force $ first (flip EncodingError Nothing . displayException) r
+ #endif
++#endif
+ 
+ 
+ #ifdef WINDOWS_DOC
+@@ -420,7 +442,7 @@ fromBytes :: MonadThrow m
+           -> m PLATFORM_STRING
+ #ifdef WINDOWS
+ fromBytes bs =
+-  let ws = WindowsString . BS16.toShort $ bs
++  let ws = WindowsString . BSP.toShort $ bs
+   in either throwM (const . pure $ ws) $ decodeWith ucs2le ws
+ #else
+ fromBytes = pure . PosixString . BSP.toShort
+@@ -441,6 +463,7 @@ fromBytestring = PosixString . BSP.toShort
+ #endif
+ 
+ 
++#if !defined(__MHS__)
+ #ifdef WINDOWS_DOC
+ -- | QuasiQuote a 'WindowsString'. This accepts Unicode characters
+ -- and encodes as UTF-16LE on windows.
+@@ -476,6 +499,7 @@ pstr =
+       fail "illegal QuasiQuote (allowed as expression or pattern only, used as a declaration)"
+   }
+ #endif
++#endif
+ 
+ 
+ -- | Unpack a platform string to a list of platform words.
+diff --git a/System/OsString/Data/ByteString/Short.hs b/System/OsString/Data/ByteString/Short.hs
+index 2537ab4..83b655a 100644
+--- a/System/OsString/Data/ByteString/Short.hs
++++ b/System/OsString/Data/ByteString/Short.hs
+@@ -1,3 +1,4 @@
++{-# LANGUAGE CPP #-}
+ {-# LANGUAGE MultiWayIf #-}
+ {-# LANGUAGE NoImplicitPrelude #-}
+ -- |
+@@ -27,7 +28,7 @@ module System.OsString.Data.ByteString.Short (
+ 
+     -- * The @ShortByteString@ type
+ 
+-    ShortByteString(..),
++    ShortByteString,
+ 
+     -- ** Memory overhead
+     -- | With GHC, the memory overheads are as follows, expressed in words and
+@@ -174,13 +175,16 @@ module System.OsString.Data.ByteString.Short (
+     useAsCStringLen,
+   ) where
+ 
+-import Data.ByteString.Short.Internal
++import Data.ByteString.Short
++#if defined(__GLASGOW_HASKELL__)
+ import System.OsString.Data.ByteString.Short.Internal
++#endif
+ 
+ import Prelude (Maybe(..), Ord(..), Num(..), ($), otherwise)
+ import Data.Word (Word8)
+ 
+ uncons2 :: ShortByteString -> Maybe (Word8, Word8, ShortByteString)
++#if defined(__GLASGOW_HASKELL__)
+ uncons2 = \sbs ->
+   let l  = length sbs
+       nl = l - 2
+@@ -189,3 +193,9 @@ uncons2 = \sbs ->
+                            h' = indexWord8Array (asBA sbs) 1
+                            t  = create nl $ \mba -> copyByteArray (asBA sbs) 1 mba 0 nl
+                        in Just (h, h', t)
++#else
++uncons2 sbs0 = do
++  (w1, sbs1) <- uncons sbs0
++  (w2, sbs2) <- uncons sbs1
++  Just (w1, w2, sbs2)
++#endif
+diff --git a/System/OsString/Data/ByteString/Short/Internal.hs b/System/OsString/Data/ByteString/Short/Internal.hs
+index f7ddcd8..46add41 100644
+--- a/System/OsString/Data/ByteString/Short/Internal.hs
++++ b/System/OsString/Data/ByteString/Short/Internal.hs
+@@ -43,10 +43,12 @@ import Foreign.C.Types ( CSize(..) )
+ import Foreign.Storable (pokeByteOff)
+ #endif
+ import Foreign.Marshal.Array (withArray0, peekArray0, newArray0, withArrayLen, peekArray)
++#if defined(__GLASGOW_HASKELL__)
+ import GHC.Exts
+ import GHC.Word
+ import GHC.ST
+     ( ST (ST) )
++#endif
+ import GHC.Stack ( HasCallStack )
+ import Prelude hiding
+     ( length )
+diff --git a/System/OsString/Encoding.hs b/System/OsString/Encoding.hs
+index c17abb3..353d31e 100644
+--- a/System/OsString/Encoding.hs
++++ b/System/OsString/Encoding.hs
+@@ -1,9 +1,12 @@
++{-# LANGUAGE CPP #-}
++
+ module System.OsString.Encoding
+   (
+   -- * Types
+     EncodingException(..)
+   , showEncodingException
+ 
++#if defined(mingw32_HOST_OS)
+   -- * UCS-2
+   , ucs2le
+   , mkUcs2le
+@@ -27,6 +30,7 @@ module System.OsString.Encoding
+   , decodeWithBasePosix'
+   , encodeWithBaseWindows
+   , decodeWithBaseWindows
++#endif
+   )
+   where
+ 
+diff --git a/System/OsString/Encoding/Internal.hs b/System/OsString/Encoding/Internal.hs
+index 3466ac1..74d7e6e 100644
+--- a/System/OsString/Encoding/Internal.hs
++++ b/System/OsString/Encoding/Internal.hs
+@@ -9,30 +9,35 @@
+ module System.OsString.Encoding.Internal where
+ 
+ import qualified System.OsString.Data.ByteString.Short as BS8
++#if defined(mingw32_HOST_OS)
+ import qualified System.OsString.Data.ByteString.Short.Word16 as BS16
++#endif
+ 
+-import GHC.Base
+-import GHC.Real
+-import GHC.Num
+--- import GHC.IO
+-import GHC.IO.Buffer
+-import GHC.IO.Encoding.Failure
+-import GHC.IO.Encoding.Types
+ import Data.Bits
+ import Control.Exception (SomeException, try, Exception (displayException), evaluate)
+-import qualified GHC.Foreign as GHC
+ import Data.Either (Either)
+-import GHC.IO (unsafePerformIO)
+ import Control.DeepSeq (force, NFData (rnf))
+ import Data.Bifunctor (first)
+ import Data.Data (Typeable)
+-import GHC.Show (Show (show))
+ import Numeric (showHex)
+ import Foreign.C (CStringLen)
+ import Data.Char (chr)
+ import Foreign
++#if defined(__GLASGOW_HASKELL__)
++import GHC.Base
++import qualified GHC.Foreign as GHC
++-- import GHC.IO
++import GHC.IO (unsafePerformIO)
++import GHC.IO.Buffer
+ import GHC.IO.Encoding (getFileSystemEncoding, getLocaleEncoding)
++import GHC.IO.Encoding.Failure
++import GHC.IO.Encoding.Types
++import GHC.Num
++import GHC.Real
++import GHC.Show (Show (show))
++#endif
+ 
++#if defined(mingw32_HOST_OS)
+ -- -----------------------------------------------------------------------------
+ -- UCS-2 LE
+ --
+@@ -170,7 +175,7 @@ utf16le_b_decode
+                       c3 <- readWord8Buf iraw (ir+3)
+                       let x2 = fromIntegral c3 `shiftL` 8 + fromIntegral c2
+                       if | 0xd800 <= x1 && x1 <= 0xdbff
+-                         , 0xdc00 <= x2 && x2 <= 0xdfff -> do
++                           , 0xdc00 <= x2 && x2 <= 0xdfff -> do
+                              ow' <- writeCharBuf oraw ow (unsafeChr ((x1 - 0xd800)*0x400 + (x2 - 0xdc00) + 0x10000))
+                              loop (ir+4) ow'
+                          | otherwise -> do
+@@ -330,6 +335,7 @@ decodeWithBaseWindows ba = BS16.useAsCWStringLen ba $ \fp -> peekWindowsString f
+ -- the outer FFI layer).
+ encodeWithBaseWindows :: String -> IO BS16.ShortByteString
+ encodeWithBaseWindows str = withWindowsString str $ \l cstr -> BS16.packCWStringLen (cstr, l)
++#endif
+ 
+ 
+ -- -----------------------------------------------------------------------------
+diff --git a/System/OsString/Internal.hs b/System/OsString/Internal.hs
+index 7f3d284..d555332 100644
+--- a/System/OsString/Internal.hs
++++ b/System/OsString/Internal.hs
+@@ -15,21 +15,29 @@ import Control.Monad.Catch
+ import Data.ByteString
+     ( ByteString )
+ import Data.Char
++#if !defined(__MHS__)
+ import Language.Haskell.TH.Quote
+     ( QuasiQuoter (..) )
+ import Language.Haskell.TH.Syntax
+     ( Lift (..), lift )
++#endif
+ import System.IO
+     ( TextEncoding )
+ 
+ import System.OsString.Encoding ( EncodingException(..) )
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.Failure ( CodingFailureMode(..) )
++#endif
+ #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.UTF16 ( mkUTF16le )
++#endif
+ import System.OsString.Encoding ( encodeWithBaseWindows, decodeWithBaseWindows )
+ import qualified System.OsString.Windows as PF
+ #else
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.UTF8 ( mkUTF8 )
++#endif
+ import System.OsString.Encoding ( encodeWithBasePosix, decodeWithBasePosix )
+ import qualified System.OsString.Posix as PF
+ #endif
+@@ -171,6 +179,7 @@ fromBytes :: MonadThrow m
+ fromBytes = fmap OsString . PF.fromBytes
+ 
+ 
++#if !defined(__MHS__)
+ -- | QuasiQuote an 'OsString'. This accepts Unicode characters
+ -- and encodes as UTF-8 on unix and UTF-16 on windows.
+ -- If used as pattern, requires turning on the @ViewPatterns@ extension.
+@@ -202,6 +211,7 @@ osstr =
+       fail "illegal QuasiQuote (allowed as expression or pattern only, used as a declaration)"
+   }
+ #endif
++#endif
+ 
+ 
+ -- | Unpack an 'OsString' to a list of 'OsChar'.
+diff --git a/System/OsString/Internal/Types.hs b/System/OsString/Internal/Types.hs
+index 20e0e55..b664909 100644
+--- a/System/OsString/Internal/Types.hs
++++ b/System/OsString/Internal/Types.hs
+@@ -9,14 +9,15 @@
+ {-# LANGUAGE PatternSynonyms #-}
+ 
+ module System.OsString.Internal.Types
+-  (
+-    WindowsString(..)
++  ( PlatformString
++#if defined(mingw32_HOST_OS)
++  , WindowsString(..)
+   , pattern WS
+   , unWS
++#endif
+   , PosixString(..)
+   , unPS
+   , pattern PS
+-  , PlatformString
+   , WindowsChar(..)
+   , unWW
+   , pattern WW
+@@ -26,7 +27,9 @@ module System.OsString.Internal.Types
+   , PlatformChar
+   , OsString(..)
+   , OsChar(..)
++#if !defined(__MHS__)
+   , coercionToPlatformTypes
++#endif
+   )
+ where
+ 
+@@ -34,10 +37,14 @@ where
+ import Control.DeepSeq
+ import Data.Coerce (coerce)
+ import Data.Data
++#if !defined(__MHS__)
+ import Data.Type.Coercion (Coercion(..), coerceWith)
++#endif
+ import Data.Word
++#if !defined(__MHS__)
+ import Language.Haskell.TH.Syntax
+     ( Lift (..), lift )
++#endif
+ #if !MIN_VERSION_base(4,11,0)
+ import Data.Semigroup
+ #endif
+@@ -45,9 +52,14 @@ import GHC.Generics (Generic)
+ 
+ import System.OsString.Encoding.Internal
+ import qualified System.OsString.Data.ByteString.Short as BS
++#if defined(mingw32_HOST_OS)
+ import qualified System.OsString.Data.ByteString.Short.Word16 as BS16
++#endif
++#if !defined(__MHS__)
+ import qualified Language.Haskell.TH.Syntax as TH
++#endif
+ 
++#if defined(mingw32_HOST_OS)
+ -- Using unpinned bytearrays to avoid Heap fragmentation and
+ -- which are reasonably cheap to pass to FFI calls
+ -- wrapped with typeclass-friendly types allowing to avoid CPP
+@@ -58,7 +70,16 @@ import qualified Language.Haskell.TH.Syntax as TH
+ 
+ -- | Commonly used windows string as wide character bytes.
+ newtype WindowsString = WindowsString { getWindowsString :: BS.ShortByteString }
++#if !defined(__MHS__)
+   deriving (Eq, Ord, Semigroup, Monoid, Typeable, Generic, NFData)
++#else
++  deriving (Eq, Ord, Typeable, Generic, NFData)
++
++instance Semigroup WindowsString where
++  WindowsString a <> WindowsString b = WindowsString $ a <> b
++
++instance Monoid WindowsString where
++  mempty = WindowsString mempty
+ 
+ -- | Decodes as UCS-2.
+ instance Show WindowsString where
+@@ -67,13 +88,17 @@ instance Show WindowsString where
+ 
+ -- | Just a short bidirectional synonym for 'WindowsString' constructor.
+ pattern WS :: BS.ShortByteString -> WindowsString
+-pattern WS { unWS } <- WindowsString unWS where
++pattern WS a <- WindowsString a where
+   WS a = WindowsString a
+ #if __GLASGOW_HASKELL__ >= 802
+ {-# COMPLETE WS #-}
+ #endif
+ 
++unWS :: WindowsString -> BS.ShortByteString
++unWS (WS a) = a
++
+ 
++#if !defined(__MHS__)
+ instance Lift WindowsString where
+   lift (WindowsString bs) = TH.AppE (TH.ConE 'WindowsString) <$> (lift bs)
+ #if MIN_VERSION_template_haskell(2,17,0)
+@@ -81,11 +106,24 @@ instance Lift WindowsString where
+ #elif MIN_VERSION_template_haskell(2,16,0)
+   liftTyped = TH.unsafeTExpCoerce . TH.lift
+ #endif
++#endif
++#endif
++#endif
+ 
+ -- | Commonly used Posix string as uninterpreted @char[]@
+ -- array.
+ newtype PosixString = PosixString { getPosixString :: BS.ShortByteString }
++#if !defined(__MHS__)
+   deriving (Eq, Ord, Semigroup, Monoid, Typeable, Generic, NFData)
++#else
++  deriving (Eq, Ord, Typeable, Generic, NFData)
++
++instance Semigroup PosixString where
++  PosixString a <> PosixString b = PosixString $ a <> b
++
++instance Monoid PosixString where
++  mempty = PosixString mempty
++#endif
+ 
+ -- | Prints the raw bytes without decoding.
+ instance Show PosixString where
+@@ -93,12 +131,16 @@ instance Show PosixString where
+ 
+ -- | Just a short bidirectional synonym for 'PosixString' constructor.
+ pattern PS :: BS.ShortByteString -> PosixString
+-pattern PS { unPS } <- PosixString unPS where
++pattern PS a <- PosixString a where
+   PS a = PosixString a
+ #if __GLASGOW_HASKELL__ >= 802
+ {-# COMPLETE PS #-}
+ #endif
+ 
++unPS :: PosixString -> BS.ShortByteString
++unPS (PS a) = a
++
++#if !defined(__MHS__)
+ instance Lift PosixString where
+   lift (PosixString bs) = TH.AppE (TH.ConE 'PosixString) <$> (lift bs)
+ #if MIN_VERSION_template_haskell(2,17,0)
+@@ -106,6 +148,7 @@ instance Lift PosixString where
+ #elif MIN_VERSION_template_haskell(2,16,0)
+   liftTyped = TH.unsafeTExpCoerce . TH.lift
+ #endif
++#endif
+ 
+ 
+ #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
+@@ -128,20 +171,26 @@ instance Show PosixChar where
+ 
+ -- | Just a short bidirectional synonym for 'WindowsChar' constructor.
+ pattern WW :: Word16 -> WindowsChar
+-pattern WW { unWW } <- WindowsChar unWW where
++pattern WW a <- WindowsChar a where
+   WW a = WindowsChar a
+ #if __GLASGOW_HASKELL__ >= 802
+ {-# COMPLETE WW #-}
+ #endif
+ 
++unWW :: WindowsChar -> Word16
++unWW (WW a) = a
++
+ -- | Just a short bidirectional synonym for 'PosixChar' constructor.
+ pattern PW :: Word8 -> PosixChar
+-pattern PW { unPW } <- PosixChar unPW where
++pattern PW a <- PosixChar a where
+   PW a = PosixChar a
+ #if __GLASGOW_HASKELL__ >= 802
+ {-# COMPLETE PW #-}
+ #endif
+ 
++unPW :: PosixChar -> Word8
++unPW (PW a) = a
++
+ #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
+ type PlatformChar = WindowsChar
+ #else
+@@ -190,6 +239,7 @@ instance Semigroup OsString where
+ #endif
+ 
+ 
++#if !defined(__MHS__)
+ instance Lift OsString where
+   lift xs = case coercionToPlatformTypes of
+     Left (_, co) ->
+@@ -201,6 +251,7 @@ instance Lift OsString where
+ #elif MIN_VERSION_template_haskell(2,16,0)
+   liftTyped = TH.unsafeTExpCoerce . TH.lift
+ #endif
++#endif
+ 
+ 
+ -- | Newtype representing a code unit.
+@@ -221,6 +272,7 @@ instance Eq OsChar where
+ instance Ord OsChar where
+   compare (OsChar a) (OsChar b) = compare a b
+ 
++#if !defined(__MHS__)
+ -- | This is a type-level evidence that 'OsChar' is a newtype wrapper
+ -- over 'WindowsChar' or 'PosixChar' and 'OsString' is a newtype wrapper
+ -- over 'WindowsString' or 'PosixString'. If you pattern match on
+@@ -235,3 +287,4 @@ coercionToPlatformTypes = Left (Coercion, Coercion)
+ #else
+ coercionToPlatformTypes = Right (Coercion, Coercion)
+ #endif
++#endif
+diff --git a/os-string.cabal b/os-string.cabal
+index ee35404..c8d207b 100644
+--- a/os-string.cabal
++++ b/os-string.cabal
+@@ -44,15 +44,19 @@ source-repository head
+ library
+   exposed-modules:
+     System.OsString.Data.ByteString.Short
+-    System.OsString.Data.ByteString.Short.Internal
+-    System.OsString.Data.ByteString.Short.Word16
+     System.OsString.Encoding
+     System.OsString.Encoding.Internal
+     System.OsString
+     System.OsString.Internal
+     System.OsString.Internal.Types
+     System.OsString.Posix
+-    System.OsString.Windows
++  if impl(ghc)
++    exposed-modules:
++      System.OsString.Data.ByteString.Short.Internal
++  if os(windows)
++    exposed-modules:
++      System.OsString.Data.ByteString.Short.Word16
++      System.OsString.Windows
+ 
+   other-extensions:
+     CPP
+@@ -67,7 +71,9 @@ library
+     , bytestring        >=0.11.3.0
+     , deepseq
+     , exceptions
+-    , template-haskell
++  if !impl(mhs)
++    build-depends:
++      template-haskell
+ 
+   ghc-options:      -Wall
+ 

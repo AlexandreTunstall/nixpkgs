@@ -492,6 +492,32 @@ in
             name: compiler.${name}.override { enableNativeBignum = true; }
           )
         );
+
+      microhs-boot = callPackage ../development/compilers/microhs/boot.nix {
+        microhs-src = bb.compiler.microhs-0_11_7_0;
+      };
+
+      microhs-0_11_4_3 = callPackage ../development/compilers/microhs/0.11.4.3.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
+      microhs-0_11_6_0 = callPackage ../development/compilers/microhs/0.11.6.0.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
+      microhs-0_11_7_0 = callPackage ../development/compilers/microhs/0.11.7.0.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
+      microhs-0_11_7_1 = callPackage ../development/compilers/microhs/0.11.7.1.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
+      microhs-head = callPackage ../development/compilers/microhs/head.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
+      microhs = compiler.microhs-0_11_7_1;
     };
 
   # Default overrides that are applied to all package sets.
@@ -671,5 +697,19 @@ in
             buildHaskellPackages = bh.packages.native-bignum.${name};
           }
         );
+
+      microhs-0_11_7_0 = callPackage ../development/haskell-modules {
+        buildHaskellPackages = bh.packages.microhs-0_11_7_0;
+        ghc = bh.compiler.microhs-0_11_7_0;
+        compilerConfig = callPackage ../development/haskell-modules/configuration-microhs-0.11.7.0.nix { };
+        packageSetConfig = bootstrapPackageSet;
+      };
+
+      microhs-0_11_7_1 = callPackage ../development/haskell-modules {
+        buildHaskellPackages = bh.packages.microhs-0_11_7_1;
+        ghc = bh.compiler.microhs-0_11_7_1;
+        compilerConfig = callPackage ../development/haskell-modules/configuration-microhs-0.11.7.1.nix { };
+        packageSetConfig = bootstrapPackageSet;
+      };
     };
 }

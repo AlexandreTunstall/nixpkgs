@@ -1,0 +1,115 @@
+diff --git a/exceptions.cabal b/exceptions.cabal
+index faa9c59..c164d75 100644
+--- a/exceptions.cabal
++++ b/exceptions.cabal
+@@ -49,11 +49,14 @@ flag transformers-0-4
+ library
+   build-depends:
+     base                       >= 4.5      && < 5,
+-    stm                        >= 2.2      && < 3,
+-    template-haskell           >= 2.7      && < 2.23,
+     mtl                        >= 2.0      && < 2.4
+ 
+-  if !impl(ghc >= 8.0)
++  if !impl(mhs)
++    build-depends:
++      stm                        >= 2.2      && < 3,
++      template-haskell           >= 2.7      && < 2.23
++
++  if impl(ghc) && !impl(ghc >= 8.0)
+     build-depends: fail        == 4.9.*
+ 
+   if flag(transformers-0-4)
+@@ -82,14 +85,17 @@ test-suite exceptions-tests
+   build-depends:
+     base,
+     exceptions,
+-    stm,
+-    template-haskell,
+     mtl                        >= 2.0,
+     test-framework             >= 0.8      && < 0.9,
+     test-framework-hunit       >= 0.3      && < 0.4,
+     test-framework-quickcheck2 >= 0.3      && < 0.4,
+     QuickCheck                 >= 2.5      && < 2.15
+ 
++  if !impl(mhs)
++    build-depends:
++      stm,
++      template-haskell
++
+   if flag(transformers-0-4)
+     build-depends:
+       transformers             >= 0.4      && < 0.7
+diff --git a/src/Control/Monad/Catch.hs b/src/Control/Monad/Catch.hs
+index 1ba4e09..0785328 100644
+--- a/src/Control/Monad/Catch.hs
++++ b/src/Control/Monad/Catch.hs
+@@ -79,7 +79,9 @@ module Control.Monad.Catch (
+ import Control.Exception (Exception(..), SomeException(..))
+ import qualified Control.Exception as ControlException
+ import Control.Monad (liftM)
++#if !defined(__MHS__)
+ import qualified Control.Monad.STM as STM
++#endif
+ import qualified Control.Monad.Trans.RWS.Lazy as LazyRWS
+ import qualified Control.Monad.Trans.RWS.Strict as StrictRWS
+ import qualified Control.Monad.Trans.State.Lazy as LazyS
+@@ -87,7 +89,9 @@ import qualified Control.Monad.Trans.State.Strict as StrictS
+ import qualified Control.Monad.Trans.Writer.Lazy as LazyW
+ import qualified Control.Monad.Trans.Writer.Strict as StrictW
+ import Control.Monad.ST (ST)
++#if !defined(__MHS__)
+ import Control.Monad.STM (STM)
++#endif
+ import Control.Monad.Trans.Class (MonadTrans(..))
+ import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
+ import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
+@@ -95,7 +99,9 @@ import Control.Monad.Trans.Cont (ContT)
+ import Control.Monad.Trans.Identity
+ import Control.Monad.Trans.Reader (ReaderT(..), runReaderT)
+ 
++#if !defined(__MHS__)
+ import Language.Haskell.TH.Syntax (Q)
++#endif
+ 
+ #if MIN_VERSION_base(4,4,0)
+ import Control.Monad.ST.Unsafe (unsafeIOToST)
+@@ -345,6 +351,14 @@ class MonadCatch m => MonadMask m where
+     -- ^ inner action to perform with the resource
+     -> m (b, c)
+ 
++#if defined(__MHS__)
++  -- MicroHs fails to type check its default implementations when the definition
++  -- has a covariant polytype.
++  -- See https://github.com/augustss/MicroHs/issues/142
++  mask _ = undefined
++  uninterruptibleMask _ = undefined
++#endif
++
+ -- | A 'MonadMask' computation may either succeed with a value, abort with an
+ -- exception, or abort for some other reason. For example, in @ExceptT e IO@
+ -- you can use 'throwM' to abort with an exception ('ExitCaseException') or
+@@ -360,8 +374,10 @@ instance MonadThrow [] where
+   throwM _ = []
+ instance MonadThrow Maybe where
+   throwM _ = Nothing
++#if !defined(__MHS__)
+ instance MonadThrow Q where
+   throwM = fail . show
++#endif
+ 
+ instance MonadThrow IO where
+   throwM = ControlException.throwIO
+@@ -381,10 +397,12 @@ instance MonadMask IO where
+ instance MonadThrow (ST s) where
+   throwM = unsafeIOToST . ControlException.throwIO
+ 
++#if !defined(__MHS__)
+ instance MonadThrow STM where
+   throwM = STM.throwSTM
+ instance MonadCatch STM where
+   catch = STM.catchSTM
++#endif
+ 
+ instance e ~ SomeException => MonadThrow (Either e) where
+   throwM = Left . toException

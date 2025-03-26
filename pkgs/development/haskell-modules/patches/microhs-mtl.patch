@@ -1,0 +1,197 @@
+diff --git a/Control/Monad/Accum.hs b/Control/Monad/Accum.hs
+index 7be9140..cbe3a5a 100644
+--- a/Control/Monad/Accum.hs
++++ b/Control/Monad/Accum.hs
+@@ -1,3 +1,4 @@
++{-# LANGUAGE CPP #-}
+ {-# LANGUAGE DerivingVia #-}
+ {-# LANGUAGE FlexibleInstances #-}
+ {-# LANGUAGE FunctionalDependencies #-}
+@@ -108,6 +109,9 @@ import qualified Control.Monad.Trans.State.Strict as StrictState
+ import qualified Control.Monad.Trans.Writer.CPS as CPSWriter
+ import qualified Control.Monad.Trans.Writer.Lazy as LazyWriter
+ import qualified Control.Monad.Trans.Writer.Strict as StrictWriter
++#if defined(__MHS__)
++import Data.Coerce (coerce)
++#endif
+ import Data.Functor (($>))
+ import Data.Functor.Identity (Identity)
+ import Data.Kind (Type)
+@@ -165,6 +169,7 @@ instance (Monoid w) => MonadAccum w (AccumT w Identity) where
+   add = Accum.add
+   accum = Accum.accum
+ 
++#if !defined(__MHS__)
+ -- | The accumulated value \'survives\' an error: even if the
+ -- computation fails to deliver a result, we still have an accumulated value.
+ --
+@@ -273,6 +278,79 @@ deriving via
+   instance
+     (MonadAccum w' m, Monoid w) =>
+     MonadAccum w' (StrictWriter.WriterT w m)
++#else
++-- MicroHs has incorrect scoping rules that break standalone MPTC derivingvia
++-- See https://github.com/augustss/MicroHs/issues/139
++instance MonadAccum w m => MonadAccum w (MaybeT m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (ContT r m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (ExceptT e m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (IdentityT m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (CPSRWS.RWST r w' s m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance (MonadAccum w m, Monoid w') => MonadAccum w (LazyRWS.RWST r w' s m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance (MonadAccum w m, Monoid w') => MonadAccum w (StrictRWS.RWST r w' s m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (ReaderT r m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (SelectT r m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (LazyState.StateT s m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (StrictState.StateT s m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance MonadAccum w m => MonadAccum w (CPSWriter.WriterT w' m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance (MonadAccum w m, Monoid w') => MonadAccum w (LazyWriter.WriterT w' m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++
++instance (MonadAccum w m, Monoid w') => MonadAccum w (StrictWriter.WriterT w' m) where
++  look = lift look
++  add = lift . add
++  accum = lift . accum
++#endif
+ 
+ -- | A helper type to decrease boilerplate when defining new transformer
+ -- instances of 'MonadAccum'.
+diff --git a/Control/Monad/Error/Class.hs b/Control/Monad/Error/Class.hs
+index b2465e7..ced4df6 100644
+--- a/Control/Monad/Error/Class.hs
++++ b/Control/Monad/Error/Class.hs
+@@ -1,3 +1,4 @@
++{-# LANGUAGE CPP #-}
+ {-# LANGUAGE FlexibleInstances #-}
+ {-# LANGUAGE FunctionalDependencies #-}
+ {-# LANGUAGE MultiParamTypeClasses #-}
+@@ -75,6 +76,11 @@ import Control.Exception (IOException, catch, ioError)
+ import Control.Monad (Monad)
+ import Data.Monoid (Monoid)
+ import Prelude (Either (Left, Right), Maybe (Nothing), either, flip, (.), IO, pure, (<$>), (>>=))
++#if defined(__MHS__)
++-- A MicroHs bug requires this symbol to be in scope.
++-- See https://github.com/augustss/MicroHs/issues/140
++import Prelude (Char)
++#endif
+ 
+ {- |
+ The strategy of combining computations that can throw exceptions
+diff --git a/Control/Monad/Select.hs b/Control/Monad/Select.hs
+index 4896042..b877633 100644
+--- a/Control/Monad/Select.hs
++++ b/Control/Monad/Select.hs
+@@ -1,3 +1,4 @@
++{-# LANGUAGE CPP #-}
+ {-# LANGUAGE DerivingVia #-}
+ {-# LANGUAGE FlexibleInstances #-}
+ {-# LANGUAGE FunctionalDependencies #-}
+@@ -125,6 +126,7 @@ class (Monad m) => MonadSelect r m | m -> r where
+ instance MonadSelect r (SelectT r Identity) where
+   select = Select.select
+ 
++#if !defined(__MHS__)
+ -- | \'Extends\' the possibilities considered by @m@ to include 'Nothing'; this
+ -- means that 'Nothing' gains a \'rank\' (namely, a value of @r@), and the
+ -- potential result could also be 'Nothing'.
+@@ -288,6 +290,51 @@ deriving via
+   instance
+     (MonadSelect r m, Monoid w) =>
+     MonadSelect r (AccumT w m)
++#else
++-- MicroHs has incorrect scoping rules that break standalone MPTC derivingvia
++-- See https://github.com/augustss/MicroHs/issues/139
++instance MonadSelect r m => MonadSelect r (MaybeT m) where
++  select = lift . select
++
++instance MonadSelect r m => MonadSelect r (ContT r' m) where
++  select = lift . select
++
++instance MonadSelect r m => MonadSelect r (ExceptT e m) where
++  select = lift . select
++
++instance MonadSelect r m => MonadSelect r (IdentityT m) where
++  select = lift . select
++
++instance MonadSelect r m => MonadSelect r (ReaderT r' m) where
++  select = lift . select
++
++instance MonadSelect r m => MonadSelect r (LazyState.StateT s m) where
++  select = lift . select
++
++instance MonadSelect r m => MonadSelect r (StrictState.StateT s m) where
++  select = lift . select
++
++instance MonadSelect r m => MonadSelect r (CPSWriter.WriterT w m) where
++  select = lift . select
++
++instance (MonadSelect r m, Monoid w) => MonadSelect r (LazyWriter.WriterT w m) where
++  select = lift . select
++
++instance (MonadSelect r m, Monoid w) => MonadSelect r (StrictWriter.WriterT w m) where
++  select = lift . select
++
++instance MonadSelect r m => MonadSelect r (CPSRWS.RWST r' w s m) where
++  select = lift . select
++
++instance (MonadSelect r m, Monoid w) => MonadSelect r (LazyRWS.RWST r' w s m) where
++  select = lift . select
++
++instance (MonadSelect r m, Monoid w) => MonadSelect r (StrictRWS.RWST r' w s m) where
++  select = lift . select
++
++instance (MonadSelect r m, Monoid w) => MonadSelect r (AccumT w m) where
++  select = lift . select
++#endif
+ 
+ -- | A helper type to decrease boilerplate when defining new transformer
+ -- instances of 'MonadSelect'.

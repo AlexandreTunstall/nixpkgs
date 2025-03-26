@@ -1,3 +1,54 @@
+diff --git a/lib/Control/Exception.hs b/lib/Control/Exception.hs
+index 64c64471..bdd5a20f 100644
+--- a/lib/Control/Exception.hs
++++ b/lib/Control/Exception.hs
+@@ -5,6 +5,8 @@ module Control.Exception(
+   throw,
+   SomeException,
+   Exception(..),
++  IOException,
++  ioError,
+   --
+   Handler(..), catches,
+   --
+@@ -12,6 +14,7 @@ module Control.Exception(
+   handle, handleJust,
+ 
+   bracket, finally, bracket_, bracketOnError,
++  mask, uninterruptibleMask,
+ 
+   try,
+   throwIO,
+@@ -19,12 +22,14 @@ module Control.Exception(
+   displaySomeException,
+   evaluate,
+   mapException,
++  assert,
+   --
+   ArithException(..),
+   ) where
+ import qualified Prelude(); import MiniPrelude
+ import Control.Exception.Internal
+ import {-# SOURCE #-} Data.Typeable
++import System.IO.Error
+ import System.IO.Unsafe
+ 
+ instance Show SomeException where
+@@ -130,6 +135,14 @@ bracketOnError before after thing =
+ mask :: ((forall a. IO a -> IO a) -> IO b) -> IO b
+ mask io = io id
+ 
++-- XXX we don't have uninterruptible masks yet either
++uninterruptibleMask :: ((forall a. IO a -> IO a) -> IO b) -> IO b
++uninterruptibleMask io = io id
++
++assert :: Bool -> a -> a
++assert False = error "assertion failed"
++assert True = id
++
+ -------------------
+ 
+ data ArithException
 diff --git a/lib/Control/Monad.hs b/lib/Control/Monad.hs
 index 8e019adb..1f088eb9 100644
 --- a/lib/Control/Monad.hs
@@ -84,6 +135,17 @@ index da6e5ff7..2690e343 100644
 -
 -instance MonadFail [] where
 -  fail _ = []
+diff --git a/lib/Control/Monad/ST/Unsafe.hs b/lib/Control/Monad/ST/Unsafe.hs
+new file mode 100644
+index 00000000..ac2c6617
+--- /dev/null
++++ b/lib/Control/Monad/ST/Unsafe.hs
+@@ -0,0 +1,5 @@
++module Control.Monad.ST.Unsafe(module Control.Monad.ST.Unsafe) where
++import Control.Monad.ST_Type
++
++unsafeIOToST :: IO a -> ST s a
++unsafeIOToST = ST
 diff --git a/lib/Data/ByteString/Builder.hs b/lib/Data/ByteString/Builder.hs
 new file mode 100644
 index 00000000..81d268f1
@@ -389,10 +451,10 @@ index bf577ba7..34554537 100644
 +accursedUnutterablePerformIO = unsafePerformIO
 diff --git a/lib/Data/ByteString/Lazy.hs b/lib/Data/ByteString/Lazy.hs
 new file mode 100644
-index 00000000..1940649d
+index 00000000..4bea3c21
 --- /dev/null
 +++ b/lib/Data/ByteString/Lazy.hs
-@@ -0,0 +1,330 @@
+@@ -0,0 +1,358 @@
 +module Data.ByteString.Lazy(module Data.ByteString.Lazy) where
 +import qualified Data.ByteString as B
 +import Data.Coerce
@@ -402,10 +464,14 @@ index 00000000..1940649d
 +import Data.Semigroup
 +import Data.String
 +import Data.Word (Word8)
++import Foreign.C.String (CString, CStringLen)
 +import System.IO (Handle)
 +
 +newtype ByteString = BS B.ByteString
 +  deriving (Eq, Ord)
++
++instance Show ByteString where
++  showsPrec p (BS bs) = showsPrec p bs
 +
 +instance IsString ByteString where
 +  fromString = BS . fromString
@@ -418,17 +484,29 @@ index 00000000..1940649d
 +
 +type LazyByteString = ByteString
 +
-+fromChunks :: [B.StrictByteString] -> ByteString
-+fromChunks = foldMap coerce
++empty :: ByteString
++empty = coerce B.empty
++
++singleton :: Word8 -> ByteString
++singleton = coerce B.singleton
 +
 +pack :: [Word8] -> ByteString
 +pack = coerce B.pack
++
++unpack :: ByteString -> [Word8]
++unpack = coerce B.unpack
++
++fromChunks :: [B.StrictByteString] -> ByteString
++fromChunks = foldMap coerce
 +
 +cons :: Word8 -> ByteString -> ByteString
 +cons = coerce B.cons
 +
 +snoc :: ByteString -> Word8 -> ByteString
 +snoc = coerce B.snoc
++
++append :: ByteString -> ByteString -> ByteString
++append = coerce B.append
 +
 +head :: ByteString -> Word8
 +head = coerce B.head
@@ -723,6 +801,18 @@ index 00000000..1940649d
 +
 +appendFile :: FilePath -> ByteString -> IO ()
 +appendFile = coerce B.appendFile
++
++packCString :: CString -> IO ByteString
++packCString = coerce B.packCString
++
++packCStringLen :: CStringLen -> IO ByteString
++packCStringLen = coerce B.packCStringLen
++
++useAsCString :: ByteString -> (CString -> IO a) -> IO a
++useAsCString = B.useAsCString . coerce
++
++useAsCStringLen :: ByteString -> (CStringLen -> IO a) -> IO a
++useAsCStringLen = B.useAsCStringLen . coerce
 diff --git a/lib/Data/ByteString/Lazy/Char8.hs b/lib/Data/ByteString/Lazy/Char8.hs
 index 9611f7ce..dbf78501 100644
 --- a/lib/Data/ByteString/Lazy/Char8.hs
@@ -773,28 +863,56 @@ index 00000000..a3381c20
 +defaultChunkSize = 32768
 diff --git a/lib/Data/ByteString/Short.hs b/lib/Data/ByteString/Short.hs
 new file mode 100644
-index 00000000..d55bfc11
+index 00000000..e84a0b72
 --- /dev/null
 +++ b/lib/Data/ByteString/Short.hs
-@@ -0,0 +1,312 @@
+@@ -0,0 +1,352 @@
 +module Data.ByteString.Short(module Data.ByteString.Short) where
 +import qualified Data.ByteString as B
 +import Data.Coerce
 +import Data.List.NonEmpty
 +import Data.Word(Word8)
++import Foreign.C.String (CString, CStringLen)
 +import System.IO(Handle)
 +
 +newtype ShortByteString = BS { fromShort :: B.ByteString }
 +  deriving (Eq, Ord)
 +
++instance Show ShortByteString where
++  showsPrec p (BS bs) = showsPrec p bs
++
++instance IsString ShortByteString where
++  fromString = BS . fromString
++
++instance Semigroup ShortByteString where
++  BS a <> BS b = BS (a <> b)
++
++instance Monoid ShortByteString where
++  mempty = BS mempty
++
 +toShort :: B.ByteString -> ShortByteString
 +toShort = BS
++
++empty :: ShortByteString
++empty = coerce B.empty
++
++singleton :: Word8 -> ShortByteString
++singleton = coerce B.singleton
++
++pack :: [Word8] -> ShortByteString
++pack = coerce B.pack
++
++unpack :: ShortByteString -> [Word8]
++unpack = coerce B.unpack
 +
 +cons :: Word8 -> ShortByteString -> ShortByteString
 +cons = coerce B.cons
 +
 +snoc :: ShortByteString -> Word8 -> ShortByteString
 +snoc = coerce B.snoc
++
++append :: ShortByteString -> ShortByteString -> ShortByteString
++append = coerce B.append
 +
 +head :: ShortByteString -> Word8
 +head = coerce B.head
@@ -1089,6 +1207,18 @@ index 00000000..d55bfc11
 +
 +appendFile :: FilePath -> ShortByteString -> IO ()
 +appendFile = coerce B.appendFile
++
++packCString :: CString -> IO ShortByteString
++packCString = coerce B.packCString
++
++packCStringLen :: CStringLen -> IO ShortByteString
++packCStringLen = coerce B.packCStringLen
++
++useAsCString :: ShortByteString -> (CString -> IO a) -> IO a
++useAsCString = B.useAsCString . coerce
++
++useAsCStringLen :: ShortByteString -> (CStringLen -> IO a) -> IO a
++useAsCStringLen = B.useAsCStringLen . coerce
 diff --git a/lib/Data/ByteString/Unsafe.hs b/lib/Data/ByteString/Unsafe.hs
 new file mode 100644
 index 00000000..4da1cc78
@@ -1483,6 +1613,19 @@ index 5c18948f..c9cef8d3 100644
  instance Integral Natural where
    toInteger (N i) = i
    quotRem (N x) (N y) = (N q, N r) where (q, r) = quotRem x y
+diff --git a/lib/Prelude.hs b/lib/Prelude.hs
+index 290f555f..cf69fc38 100644
+--- a/lib/Prelude.hs
++++ b/lib/Prelude.hs
+@@ -86,7 +86,7 @@ import Data.Word(Word)
+ import System.IO(IO, putChar, putStr, putStrLn, print, getLine, getContents, interact,
+                  FilePath, readFile, writeFile, appendFile,
+                  cprint, cuprint)
+-import System.IO.Error(IOError)
++import System.IO.Error(IOError, userError)
+ import Text.Read(ReadS, Read(..), read, reads, readParen, lex)
+ import Text.Show(Show(..), ShowS, shows, showChar, showString, showParen)
+ import Primitives(_wordSize, _isWindows)
 diff --git a/lib/System/IO.hs b/lib/System/IO.hs
 index 1a7cf556..a21fdafa 100644
 --- a/lib/System/IO.hs
@@ -1533,10 +1676,18 @@ index de6cd912..439b52b2 100644
  -- ---------------------------------------------------------------------------
  -- Lexing character literals
 diff --git a/lib/libs.cabal b/lib/libs.cabal
-index 594db737..5094e650 100644
+index 594db737..551971e9 100644
 --- a/lib/libs.cabal
 +++ b/lib/libs.cabal
-@@ -43,8 +43,15 @@ library base
+@@ -34,6 +34,7 @@ library base
+         Control.Monad.Fix
+         Control.Monad.IO.Class
+         Control.Monad.ST
++        Control.Monad.ST.Unsafe
+         Control.Monad.Zip
+         Data.Array
+         Data.Bifoldable
+@@ -43,8 +44,15 @@ library base
          Data.Bool
          Data.Bounded
          Data.ByteString
@@ -1552,7 +1703,7 @@ index 594db737..5094e650 100644
          Data.Char
          Data.Coerce
          Data.Complex
-@@ -122,6 +129,7 @@ library base
+@@ -122,6 +130,7 @@ library base
          Foreign.Marshal.Utils
          Foreign.Ptr
          Foreign.Storable

@@ -48,16 +48,23 @@ let
   inherit (lib) fix' extends makeOverridable;
   inherit (haskellLib) overrideCabal;
 
-  mkDerivationImpl = pkgs.callPackage ./generic-builder.nix {
+  builder = if !(ghc.isMhs or false)
+    then ./generic-builder.nix
+    else ./microhs-builder.nix;
+
+  mkDerivationImpl = pkgs.callPackage builder ({
     inherit stdenv;
-    nodejs = buildPackages.nodejs-slim;
     inherit (self)
       buildHaskellPackages
       ghc
+      ;
+    inherit (self.buildHaskellPackages) jailbreak-cabal;
+  } // lib.optionalAttrs (!(ghc.isMhs or false)) {
+    inherit (self)
       ghcWithHoogle
       ghcWithPackages
       ;
-    inherit (self.buildHaskellPackages) jailbreak-cabal;
+    nodejs = buildPackages.nodejs-slim;
     hscolour = overrideCabal (drv: {
       isLibrary = false;
       doHaddock = false;
@@ -87,7 +94,9 @@ let
             }
           )
         );
-  };
+  } // lib.optionalAttrs (ghc.isMhs or false) {
+    inherit (self) wrapMhs;
+  });
 
   mkDerivation = makeOverridable mkDerivationImpl;
 
@@ -646,6 +655,9 @@ package-set { inherit pkgs lib callPackage; } self
     withPackages = self.ghcWithPackages;
     withHoogle = self.ghcWithHoogle;
   };
+
+  wrapMhs = pkgs.callPackage ../compilers/microhs/wrapper.nix {};
+
 
   /*
     Run `cabal sdist` on a source.

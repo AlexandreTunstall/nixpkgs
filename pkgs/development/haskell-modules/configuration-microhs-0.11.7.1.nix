@@ -5,6 +5,12 @@ with haskellLib;
 let
   inherit (pkgs) lib;
 
+  # Sometimes revisions are awkward to patch due to DOS line endings.
+  ignoreRevisions = p: overrideCabal {
+    editedCabalFile = null;
+    revision = null;
+  } p;
+
 in
 
 self: super:
@@ -53,7 +59,8 @@ self: super:
   ] self.containers_0_7;
   #deepseq = self.deepseq_1_5_1_0;
   #directory = self.directory_1_3_9_0;
-  exceptions = self.exceptions_0_10_8;
+  exceptions = appendPatch patches/microhs-exceptions.patch
+    (ignoreRevisions self.exceptions_0_10_8);
   filepath = self.filepath_1_5_3_0;
   ghc-bignum = null;
   ghc-boot-th = null;
@@ -65,13 +72,16 @@ self: super:
   hpc = self.hpc_0_7_0_2;
   integer-gmp = self.integer-gmp_1_1;
   libiserv = self.libiserv_9_6_6;
-  mtl = appendPatch (pkgs.fetchpatch {
-    url = "https://github.com/haskell/mtl/commit/f2b6d233f3ab6595fd4a9db7e4f446e21e937d8c.patch";
-    name = "revert-polykinded-cont.patch";
-    includes = [ "Control/Monad/Cont/Class.hs" ];
-    revert = true;
-    hash = "sha256-ZhH4Qkil1lHhqSmnwiUw5caOPyvX9uhHQvsovoI74Q4=";
-  }) self.mtl_2_3_1;
+  mtl = appendPatches [
+    (pkgs.fetchpatch {
+      url = "https://github.com/haskell/mtl/commit/f2b6d233f3ab6595fd4a9db7e4f446e21e937d8c.patch";
+      name = "revert-polykinded-cont.patch";
+      includes = [ "Control/Monad/Cont/Class.hs" ];
+      revert = true;
+      hash = "sha256-ZhH4Qkil1lHhqSmnwiUw5caOPyvX9uhHQvsovoI74Q4=";
+    })
+    patches/microhs-mtl.patch
+  ] self.mtl_2_3_1;
   parsec = self.parsec_3_1_17_0;
   pretty = appendPatch patches/microhs-pretty.patch self.pretty_1_1_3_6;
   #process = self.process_1_6_25_0;
@@ -108,12 +118,11 @@ self: super:
       name = "microhs-fixes-3.patch";
       hash = "sha256-KtTlZV7Xy+S3v0YORYnADo01WdSaPFJJQ4SfCPFF7hY=";
     })
-  ] (overrideCabal {
-    # The revision is awkward to patch due to DOS line endings.
-    editedCabalFile = null;
-    revision = null;
-  } self.time_1_14);
+  ] (ignoreRevisions self.time_1_14);
   transformers = self.transformers_0_6_1_2;
   unix = self.unix_2_8_5_1;
   xhtml = self.xhtml_3000_3_0_0;
+
+  # Miscellaneous compatibility fixes
+  os-string = appendPatch patches/microhs-os-string.patch super.os-string;
 }
