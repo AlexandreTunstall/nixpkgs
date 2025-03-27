@@ -521,12 +521,28 @@ in
         inherit (bb.compiler) microhs-boot;
       };
 
+      microhs-0_12_0_1 = callPackage ../development/compilers/microhs/0.12.0.1.nix {
+        microhs-boot = bb.compiler.microhs-0_12_0_0;
+      };
+
       microhs-0_12_0_2 = callPackage ../development/compilers/microhs/0.12.0.2.nix {
-        inherit (bb.compiler) microhs-boot;
+        microhs-boot = bb.compiler.microhs-0_12_0_0;
+      };
+
+      microhs-0_12_1_0 = callPackage ../development/compilers/microhs/0.12.1.0.nix {
+        microhs-boot = bb.compiler.microhs-0_12_0_0;
+      };
+
+      microhs-0_12_2_0 = callPackage ../development/compilers/microhs/0.12.2.0.nix {
+        microhs-boot = bb.compiler.microhs-0_12_0_0;
+      };
+
+      microhs-0_12_3_0 = callPackage ../development/compilers/microhs/0.12.3.0.nix {
+        microhs-boot = bb.compiler.microhs-0_12_0_0;
       };
 
       microhs-head = callPackage ../development/compilers/microhs/head.nix {
-        inherit (bb.compiler) microhs-boot;
+        microhs-boot = bb.compiler.microhs-0_12_0_0;
       };
 
       microhs = compiler.microhs-0_11_7_1;

@@ -35,9 +35,9 @@ stdenv.mkDerivation {
   ] ++ lib.optionals (lib.versionOlder version "0.12") [
     ./microcabal-parser-leniency.patch
     ./lib-fixes.patch
+  ] ++ lib.optionals (version == "0.12.0.0") [
+    ./remove-unicode-char-refs.patch
   ];
-
-  nativeBuildInputs = [ microhs-boot ];
 
   makeFlags = [
     "CABALDIR=$(out)/lib/mcabal"
@@ -47,14 +47,28 @@ stdenv.mkDerivation {
 
   buildFlags = [ "bootstrapcpphs" "generated/mcabal.c" "all" ];
 
-  # The bin/mhs target cannot be skipped by copying the boot mhs
+  # Delete pre-generated sources
   # The Makefile tries to use git if submodule .git doesn't exist
-  preBuild = ''
+  postPatch = ''
     rm -r generated
-    mkdir -p generated bin
-    printf 'Generating mhs.c using the boot compiler\n'
-    mhs -z -i -imhs -isrc -ilib -ipaths MicroHs.Main -ogenerated/mhs.c
     touch {cpphssrc/malcolm-wallace-universe,MicroCabal}/.git
+    cp src/MicroHs/Translate.hs $TMP/Translate.hs
+    cp ${./NoTranslate.hs} src/MicroHs/Translate.hs
+  '';
+
+  preBuild = ''
+    mkdir -p generated bin
+    printf '#error "Should not be compiled"\n' > generated/mhs.c
+
+    # bin/mhs depends on targets.conf, which needs to be generated first
+    make $makeFlags targets.conf
+    # The Makefile rules for bin/mhs don't link our boot compiler's RTS
+    printf 'Building bin/mhs using ${microhs-boot}/bin/mhs\n'
+    ${microhs-boot}/bin/mhs -z -i -imhs -isrc -ipaths MicroHs.Main -o bin/mhs
+  '';
+
+  postBuild = ''
+    cp $TMP/Translate.hs src/MicroHs/Translate.hs
   '';
 
   postInstall = ''
@@ -68,5 +82,19 @@ stdenv.mkDerivation {
     haskellCompilerName = "mhs-${version}";
     targetPrefix = "";
     isMhs = true;
+  };
+
+  meta = {
+    description = "Small compiler for Haskell";
+    longDescription = ''
+      A compiler for an extended subset of Haskell 2010.
+      The compiler translates to combinators and can compile itself.
+    '';
+    homepage = "https://github.com/augustss/MicroHs";
+    license = lib.licensesSpdx."Apache-2.0";
+    mainProgram = "mhs";
+    maintainers = with lib.maintainers; [ AlexandreTunstall ];
+    platforms = lib.platforms.all;
+    broken = version == "0.12.0.1";
   };
 }

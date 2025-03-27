@@ -1038,6 +1038,18 @@
     githubId = 49982580;
     name = "Alexander Fuchs";
   };
+  AlexandreTunstall = {
+    name = "Alex Tunstall";
+    email = "alex@tunstall.xyz";
+    matrix = "@alex:tunstall.xyz";
+    github = "AlexandreTunstall";
+    githubId = 32900877;
+    keys = [{
+      # Fetch with WKD (e.g. gpg --locate-external-keys alex@tunstall.xyz)
+      # The fetched key should have this fingerprint (please let me know if not)
+      fingerprint = "51A5 8478 068E B19D FD35  D542 F6CA 1AD5 54DC A5E4";
+    }];
+  };
   alexnortung = {
     name = "alexnortung";
     email = "alex_nortung@live.dk";
