@@ -740,6 +740,13 @@ in
         packageSetConfig = bootstrapPackageSet;
       };
 
+      microhs-0_12_3_0 = callPackage ../development/haskell-modules {
+        buildHaskellPackages = bh.packages.microhs-0_12_3_0;
+        ghc = bh.compiler.microhs-0_12_3_0;
+        compilerConfig = callPackage ../development/haskell-modules/configuration-microhs-0.12.3.0.nix { };
+        packageSetConfig = bootstrapPackageSet;
+      };
+
       microhs-head = callPackage ../development/haskell-modules {
         buildHaskellPackages = bh.packages.microhs-head;
         ghc = bh.compiler.microhs-head;

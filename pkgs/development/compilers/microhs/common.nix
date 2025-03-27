@@ -37,6 +37,8 @@ stdenv.mkDerivation {
     ./lib-fixes.patch
   ] ++ lib.optionals (version == "0.12.0.0") [
     ./remove-unicode-char-refs.patch
+  ] ++ lib.optionals (version == "0.12.3.0") [
+    ./lib-fixes-0.12.3.0.patch
   ];
 
   makeFlags = [
