@@ -4,6 +4,8 @@
 }:
 
 { fetchFromGitHub
+, fetchpatch
+, lib
 , microhs-boot
 , stdenv
 , writeShellScript
@@ -22,9 +24,17 @@ stdenv.mkDerivation {
 
   patches = [
     ./install-cabaldir.patch
+    ./cpphs-fixes.patch
+  ] ++ lib.optionals (lib.versionAtLeast version "0.11.7.2") [
+    (fetchpatch {
+      name = "fix-mcabal-build.patch";
+      url = "https://github.com/augustss/MicroHs/commit/4fd6d0415b7a3dd36f54a8600c3fd714baa3f05b.patch";
+      revert = true;
+      hash = "sha256-PyqFdAO2PGyse8KTDTKNwGM58ocdGTPXR9/Ni8Jpips=";
+    })
+  ] ++ lib.optionals (lib.versionOlder version "0.12") [
     ./microcabal-parser-leniency.patch
     ./lib-fixes.patch
-    ./cpphs-fixes.patch
   ];
 
   nativeBuildInputs = [ microhs-boot ];

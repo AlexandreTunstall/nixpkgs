@@ -513,6 +513,18 @@ in
         inherit (bb.compiler) microhs-boot;
       };
 
+      microhs-0_11_7_2 = callPackage ../development/compilers/microhs/0.11.7.2.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
+      microhs-0_12_0_0 = callPackage ../development/compilers/microhs/0.12.0.0.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
+      microhs-0_12_0_2 = callPackage ../development/compilers/microhs/0.12.0.2.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
       microhs-head = callPackage ../development/compilers/microhs/head.nix {
         inherit (bb.compiler) microhs-boot;
       };
@@ -709,6 +721,13 @@ in
         buildHaskellPackages = bh.packages.microhs-0_11_7_1;
         ghc = bh.compiler.microhs-0_11_7_1;
         compilerConfig = callPackage ../development/haskell-modules/configuration-microhs-0.11.7.1.nix { };
+        packageSetConfig = bootstrapPackageSet;
+      };
+
+      microhs-head = callPackage ../development/haskell-modules {
+        buildHaskellPackages = bh.packages.microhs-head;
+        ghc = bh.compiler.microhs-head;
+        compilerConfig = callPackage ../development/haskell-modules/configuration-microhs-head.nix { };
         packageSetConfig = bootstrapPackageSet;
       };
     };
