@@ -49,6 +49,7 @@ stdenv.mkDerivation {
     (if lib.versionOlder version "0.12"
       then patches/lib/0017-0.11-Add-withBinaryFile.patch
       else patches/lib/0017-Add-withBinaryFile.patch)
+    patches/lib/0018-Add-Bifunctor-tuple-instances.patch
   ] ++ lib.optionals (lib.versionAtLeast version "0.11.7.2") [
     (fetchpatch {
       name = "fix-mcabal-build.patch";

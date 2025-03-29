@@ -1,21 +1,22 @@
-From 91a9e67e970917bc4c66f5f4db636162166e91fd Mon Sep 17 00:00:00 2001
+From b4eb7dc9d48ea0e65e0fbc49b60cfc14cb9f76f3 Mon Sep 17 00:00:00 2001
 From: Alex Tunstall <alex@tunstall.xyz>
 Date: Fri, 28 Mar 2025 07:12:14 +0000
 Subject: [PATCH] Add Data.ByteString.Short
 
 ---
- lib/Data/ByteString/Short.hs | 352 +++++++++++++++++++++++++++++++++++
+ lib/Data/ByteString/Short.hs | 355 +++++++++++++++++++++++++++++++++++
  lib/libs.cabal               |   1 +
- 2 files changed, 353 insertions(+)
+ 2 files changed, 356 insertions(+)
  create mode 100644 lib/Data/ByteString/Short.hs
 
 diff --git a/lib/Data/ByteString/Short.hs b/lib/Data/ByteString/Short.hs
 new file mode 100644
-index 00000000..e84a0b72
+index 00000000..fcfb4a65
 --- /dev/null
 +++ b/lib/Data/ByteString/Short.hs
-@@ -0,0 +1,352 @@
+@@ -0,0 +1,355 @@
 +module Data.ByteString.Short(module Data.ByteString.Short) where
++import Control.DeepSeq.Class
 +import qualified Data.ByteString as B
 +import Data.Coerce
 +import Data.List.NonEmpty
@@ -25,6 +26,8 @@ index 00000000..e84a0b72
 +
 +newtype ShortByteString = BS { fromShort :: B.ByteString }
 +  deriving (Eq, Ord)
++
++instance NFData ShortByteString
 +
 +instance Show ShortByteString where
 +  showsPrec p (BS bs) = showsPrec p bs

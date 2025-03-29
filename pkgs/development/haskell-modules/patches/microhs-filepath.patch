@@ -1,0 +1,358 @@
+diff --git a/System/FilePath/Internal.hs b/System/FilePath/Internal.hs
+index 5b3cfa2..ea737d9 100644
+--- a/System/FilePath/Internal.hs
++++ b/System/FilePath/Internal.hs
+@@ -117,6 +117,9 @@ import Data.Bifunctor (first)
+ import Data.Semigroup ((<>))
+ import qualified Prelude as P
+ import Data.Maybe(fromMaybe, isJust)
++#if defined(__MHS__)
++import Data.List ([]([], (:)))
++#endif
+ import qualified Data.List as L
+ 
+ #ifndef OS_PATH
+@@ -132,7 +135,7 @@ import Data.List(stripPrefix, isSuffixOf, uncons, dropWhileEnd)
+ import Prelude (fromIntegral)
+ import Control.Exception ( SomeException, evaluate, try, displayException )
+ import Control.DeepSeq (force)
+-import GHC.IO (unsafePerformIO)
++import System.IO.Unsafe (unsafePerformIO)
+ import qualified Data.Char as C
+ #ifdef WINDOWS
+ import GHC.IO.Encoding.Failure ( CodingFailureMode(..) )
+@@ -145,9 +148,13 @@ import System.OsString.Data.ByteString.Short ( packCStringLen )
+ #define STRING ShortByteString
+ #define FILEPATH ShortByteString
+ #else
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.Failure ( CodingFailureMode(..) )
+ import qualified GHC.Foreign as GHC
+ import GHC.IO.Encoding.UTF8 ( mkUTF8 )
++#else
++import Foreign.C.String
++#endif
+ import Data.Word ( Word8 )
+ import System.OsString.Data.ByteString.Short
+ #define CHAR Word8
+@@ -1270,6 +1277,7 @@ snoc :: String -> Char -> String
+ snoc str = \c -> str <> [c]
+ 
+ #else
++#if !defined(__MHS__)
+ #ifdef WINDOWS
+ fromString :: P.String -> STRING
+ fromString str = P.either (P.error . P.show) P.id $ unsafePerformIO $ do
+@@ -1281,6 +1289,12 @@ fromString str = P.either (P.error . P.show) P.id $ unsafePerformIO $ do
+   r <- try @SomeException $ GHC.withCStringLen (mkUTF8 ErrorOnCodingFailure) str $ \cstr -> packCStringLen cstr
+   evaluate $ force $ first displayException r
+ #endif
++#else
++fromString :: P.String -> STRING
++fromString str = unsafePerformIO $ do
++  r <- withCStringLen str $ \cstr -> packCStringLen cstr
++  evaluate r
++#endif
+ 
+ _a, _z, _A, _Z, _period, _quotedbl, _backslash, _slash, _question, _U, _N, _C, _colon, _semicolon, _US, _less, _greater, _bar, _asterisk, _nul, _space, _underscore :: CHAR
+ _a = 0x61
+diff --git a/System/OsPath/Common.hs b/System/OsPath/Common.hs
+index 5058b0e..c8e7f3a 100644
+--- a/System/OsPath/Common.hs
++++ b/System/OsPath/Common.hs
+@@ -41,20 +41,26 @@ module System.OsPath
+   , OsChar
+ #endif
+   -- * Filepath construction
++#if !defined(__MHS__)
+   , PS.encodeUtf
+   , PS.unsafeEncodeUtf
+   , PS.encodeWith
++#endif
+   , encodeFS
++#if !defined(__MHS__)
+ #if defined(WINDOWS) || defined(POSIX)
+   , pstr
+ #else
+   , osp
++#endif
+ #endif
+   , PS.pack
+ 
+   -- * Filepath deconstruction
++#if !defined(__MHS__)
+   , PS.decodeUtf
+   , PS.decodeWith
++#endif
+   , decodeFS
+   , PS.unpack
+ 
+@@ -132,24 +138,32 @@ import GHC.IO.Encoding.Failure ( CodingFailureMode(..) )
+ import Control.Monad ( when )
+ 
+ #elif defined(POSIX)
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.Failure ( CodingFailureMode(..) )
++#endif
+ import Control.Monad ( when )
++#if !defined(__MHS__)
+ import Language.Haskell.TH.Quote
+     ( QuasiQuoter (..) )
+ import Language.Haskell.TH.Syntax
+     ( Lift (..), lift )
+ 
+ import GHC.IO.Encoding.UTF8 ( mkUTF8 )
++#endif
+ import System.OsPath.Types
+ import System.OsString.Posix as PS
+     ( unsafeFromChar
+     , toChar
++#if !defined(__MHS__)
+     , decodeUtf
+     , decodeWith
++#endif
+     , pack
++#if !defined(__MHS__)
+     , encodeUtf
+     , unsafeEncodeUtf
+     , encodeWith
++#endif
+     , unpack
+     )
+ import Data.Bifunctor ( bimap )
+@@ -158,13 +172,19 @@ import qualified System.OsPath.Posix.Internal as C
+ #else
+ 
+ import System.OsPath.Internal as PS
++#if !defined(__MHS__)
+     ( osp
+     , decodeUtf
+     , decodeWith
+     , pack
++#else
++    ( pack
++#endif
++#if !defined(__MHS__)
+     , encodeUtf
+     , unsafeEncodeUtf
+     , encodeWith
++#endif
+     , unpack
+     )
+ import System.OsPath.Types
+diff --git a/System/OsPath/Encoding.hs b/System/OsPath/Encoding.hs
+index 6281ef3..5ac84b5 100644
+--- a/System/OsPath/Encoding.hs
++++ b/System/OsPath/Encoding.hs
+@@ -4,6 +4,7 @@ module System.OsPath.Encoding
+     EncodingException(..)
+   , showEncodingException
+ 
++#if !defined(__MHS__)
+   -- * UCS-2
+   , ucs2le
+   , mkUcs2le
+@@ -19,12 +20,15 @@ module System.OsPath.Encoding
+   , utf16le_b_EF
+   , utf16le_b_decode
+   , utf16le_b_encode
++#endif
+ 
+   -- * base encoding
+   , encodeWithBasePosix
+   , decodeWithBasePosix
++#if !defined(__MHS__)
+   , encodeWithBaseWindows
+   , decodeWithBaseWindows
++#endif
+   )
+   where
+ 
+diff --git a/System/OsPath/Internal.hs b/System/OsPath/Internal.hs
+index bc1d5a9..01cf88c 100644
+--- a/System/OsPath/Internal.hs
++++ b/System/OsPath/Internal.hs
+@@ -15,29 +15,36 @@ import Control.Monad.Catch
+     ( MonadThrow )
+ import Data.ByteString
+     ( ByteString )
++#if !defined(__MHS__)
+ import Language.Haskell.TH.Quote
+     ( QuasiQuoter (..) )
+ import Language.Haskell.TH.Syntax
+     ( Lift (..), lift )
+ import GHC.IO.Encoding.Failure ( CodingFailureMode(..) )
++#endif
+ 
+ import System.OsString.Internal.Types
+ import System.OsPath.Encoding
+ import Control.Monad (when)
++#if !defined(__MHS__)
+ import System.IO
+     ( TextEncoding )
++#endif
+ 
+ #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
+ import qualified System.OsPath.Windows as PF
+ import GHC.IO.Encoding.UTF16 ( mkUTF16le )
+ #else
+ import qualified System.OsPath.Posix as PF
++#if !defined(__MHS__)
+ import GHC.IO.Encoding.UTF8 ( mkUTF8 )
+ #endif
++#endif
+ import GHC.Stack (HasCallStack)
+ 
+ 
+ 
++#if !defined(__MHS__)
+ -- | Partial unicode friendly encoding.
+ --
+ -- On windows this encodes as UTF16-LE (strictly), which is a pretty good guess.
+@@ -65,6 +72,7 @@ encodeWith :: TextEncoding  -- ^ unix text encoding
+            -> FilePath
+            -> Either EncodingException OsPath
+ encodeWith = OS.encodeWith
++#endif
+ 
+ -- | Like 'encodeUtf', except this mimics the behavior of the base library when doing filesystem
+ -- operations, which is:
+@@ -81,6 +89,7 @@ encodeFS :: FilePath -> IO OsPath
+ encodeFS = OS.encodeFS
+ 
+ 
++#if !defined(__MHS__)
+ -- | Partial unicode friendly decoding.
+ --
+ -- On windows this decodes as UTF16-LE (strictly), which is a pretty good guess.
+@@ -96,6 +105,7 @@ decodeWith :: TextEncoding  -- ^ unix text encoding
+            -> OsPath
+            -> Either EncodingException FilePath
+ decodeWith = OS.decodeWith
++#endif
+ 
+ -- | Like 'decodeUtf', except this mimics the behavior of the base library when doing filesystem
+ -- operations, which is:
+@@ -124,6 +134,7 @@ fromBytes = OS.fromBytes
+ 
+ 
+ 
++#if !defined(__MHS__)
+ -- | QuasiQuote an 'OsPath'. This accepts Unicode characters
+ -- and encodes as UTF-8 on unix and UTF-16LE on windows. Runs 'isValid'
+ -- on the input. If used as a pattern, requires turning on the @ViewPatterns@
+@@ -159,6 +170,7 @@ osp = QuasiQuoter
+       fail "illegal QuasiQuote (allowed as expression or pattern only, used as a declaration)"
+   }
+ #endif
++#endif
+ 
+ 
+ -- | Unpack an 'OsPath' to a list of 'OsChar'.
+diff --git a/System/OsPath/Posix.hs b/System/OsPath/Posix.hs
+index fc62c86..a777d5d 100644
+--- a/System/OsPath/Posix.hs
++++ b/System/OsPath/Posix.hs
+@@ -11,6 +11,7 @@
+ 
+ #include "Common.hs"
+ 
++#if !defined(__MHS__)
+ -- | QuasiQuote a 'PosixPath'. This accepts Unicode characters
+ -- and encodes as UTF-8. Runs 'isValid' on the input.
+ pstr :: QuasiQuoter
+@@ -29,3 +30,4 @@ pstr =
+   , quoteDec  = \_ ->
+       fail "illegal QuasiQuote (allowed as expression or pattern only, used as a declaration)"
+   }
++#endif
+diff --git a/System/OsPath/Types.hs b/System/OsPath/Types.hs
+index 6bf1b77..22c778c 100644
+--- a/System/OsPath/Types.hs
++++ b/System/OsPath/Types.hs
+@@ -4,14 +4,20 @@ module System.OsPath.Types
+   (
+   -- * FilePath types
+     OsPath
++#if !defined(__MHS__)
+   , WindowsPath
++#endif
+   , PosixPath
+   , PlatformPath
+ 
+   -- * OsString reexports
++#if !defined(__MHS__)
+   , WindowsString
++#endif
+   , PosixString
++#if !defined(__MHS__)
+   , WindowsChar
++#endif
+   , PosixChar
+   , OsString
+   , OsChar
+@@ -21,8 +27,10 @@ where
+ import System.OsString.Internal.Types
+ 
+ 
++#if !defined(__MHS__)
+ -- | Filepaths are @wchar_t*@ data on windows as passed to syscalls.
+ type WindowsPath = WindowsString
++#endif
+ 
+ -- | Filepaths are @char[]@ data on unix as passed to syscalls.
+ type PosixPath = PosixString
+diff --git a/System/OsPath/Windows.hs b/System/OsPath/Windows.hs
+index ab9efc0..1e46a45 100644
+--- a/System/OsPath/Windows.hs
++++ b/System/OsPath/Windows.hs
+@@ -12,6 +12,7 @@
+ #include "Common.hs"
+ 
+ 
++#if !defined(__MHS__)
+ -- | QuasiQuote a 'WindowsPath'. This accepts Unicode characters
+ -- and encodes as UTF-16LE. Runs 'isValid' on the input.
+ pstr :: QuasiQuoter
+@@ -30,3 +31,4 @@ pstr =
+   , quoteDec  = \_ ->
+       fail "illegal QuasiQuote (allowed as expression or pattern only, used as a declaration)"
+   }
++#endif
+diff --git a/filepath.cabal b/filepath.cabal
+index cee8080..2fedead 100644
+--- a/filepath.cabal
++++ b/filepath.cabal
+@@ -72,15 +72,17 @@ library
+   exposed-modules:
+     System.FilePath
+     System.FilePath.Posix
+-    System.FilePath.Windows
+     System.OsPath
+     System.OsPath.Encoding
+     System.OsPath.Internal
+     System.OsPath.Posix
+     System.OsPath.Posix.Internal
+     System.OsPath.Types
+-    System.OsPath.Windows
+-    System.OsPath.Windows.Internal
++  if !impl(mhs)
++    exposed-modules:
++      System.FilePath.Windows
++      System.OsPath.Windows
++      System.OsPath.Windows.Internal
+ 
+   other-extensions:
+     CPP
+@@ -95,8 +97,10 @@ library
+     , bytestring        >=0.11.3.0
+     , deepseq
+     , exceptions
+-    , template-haskell
+     , os-string         >=2.0.1
++  if !impl(mhs)
++    build-depends:
++      template-haskell
+ 
+   ghc-options:      -Wall
+ 

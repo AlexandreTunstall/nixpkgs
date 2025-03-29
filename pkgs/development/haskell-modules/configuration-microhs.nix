@@ -61,7 +61,7 @@ self: super:
   #directory = self.directory_1_3_9_0;
   exceptions = appendPatch patches/microhs-exceptions.patch
     (ignoreRevisions self.exceptions_0_10_8);
-  filepath = self.filepath_1_5_3_0;
+  filepath = appendPatch patches/microhs-filepath.patch self.filepath_1_5_3_0;
   ghc-bignum = null;
   ghc-boot-th = null;
   ghc-compact = null;
