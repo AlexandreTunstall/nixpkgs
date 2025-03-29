@@ -1,0 +1,35 @@
+From 00c71ea0e746a44f3bebb1de238c79415034050e Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 06:53:21 +0000
+Subject: [PATCH] Add assert
+
+---
+ lib/Control/Exception.hs | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/lib/Control/Exception.hs b/lib/Control/Exception.hs
+index 28a503a5..4c882c77 100644
+--- a/lib/Control/Exception.hs
++++ b/lib/Control/Exception.hs
+@@ -22,6 +22,7 @@ module Control.Exception(
+   displaySomeException,
+   evaluate,
+   mapException,
++  assert,
+   --
+   ArithException(..),
+   ) where
+@@ -111,6 +112,10 @@ bracketOnError before after thing =
+     a <- before
+     restore (thing a) `onException` after a
+ 
++assert :: Bool -> a -> a
++assert False = error "assertion failed"
++assert True = id
++
+ -------------------
+ 
+ data ArithException
+-- 
+2.47.2
+

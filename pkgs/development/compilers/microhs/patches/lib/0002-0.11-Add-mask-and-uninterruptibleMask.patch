@@ -1,0 +1,35 @@
+From 4a236ab477a57bf7c74df3ecf779b1fe3b42a582 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 06:49:54 +0000
+Subject: [PATCH 1/1] Add mask and uninterruptibleMask
+
+---
+ lib/Control/Exception.hs | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/lib/Control/Exception.hs b/lib/Control/Exception.hs
+index 64c64471..9243362b 100644
+--- a/lib/Control/Exception.hs
++++ b/lib/Control/Exception.hs
+@@ -12,6 +12,7 @@ module Control.Exception(
+   handle, handleJust,
+ 
+   bracket, finally, bracket_, bracketOnError,
++  mask, uninterruptibleMask,
+ 
+   try,
+   throwIO,
+@@ -130,6 +131,10 @@ bracketOnError before after thing =
+ mask :: ((forall a. IO a -> IO a) -> IO b) -> IO b
+ mask io = io id
+ 
++-- XXX we don't have uninterruptible masks yet either
++uninterruptibleMask :: ((forall a. IO a -> IO a) -> IO b) -> IO b
++uninterruptibleMask io = io id
++
+ -------------------
+ 
+ data ArithException
+-- 
+2.47.2
+

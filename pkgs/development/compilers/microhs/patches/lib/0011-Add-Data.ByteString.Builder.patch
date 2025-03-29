@@ -1,0 +1,181 @@
+From 60a398fb9338261a64db8f80463562d1a4bcd4ce Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:14:11 +0000
+Subject: [PATCH] Add Data.ByteString.Builder
+
+---
+ lib/Data/ByteString/Builder.hs | 149 +++++++++++++++++++++++++++++++++
+ lib/libs.cabal                 |   1 +
+ 2 files changed, 150 insertions(+)
+ create mode 100644 lib/Data/ByteString/Builder.hs
+
+diff --git a/lib/Data/ByteString/Builder.hs b/lib/Data/ByteString/Builder.hs
+new file mode 100644
+index 00000000..81d268f1
+--- /dev/null
++++ b/lib/Data/ByteString/Builder.hs
+@@ -0,0 +1,149 @@
++module Data.ByteString.Builder(module Data.ByteString.Builder) where
++import Data.Bits
++import qualified Data.ByteString as B
++import qualified Data.ByteString.Lazy as BL
++import qualified Data.ByteString.Short as BS
++import Data.Coerce
++import Data.Int
++import Data.Monoid.Internal
++import Data.Semigroup
++import Data.String
++import Data.Word
++import System.IO (Handle)
++import Unsafe.Coerce
++
++newtype Builder = Builder { toLazyByteString :: BL.LazyByteString }
++
++instance IsString Builder where
++  fromString = Builder . fromString
++
++instance Semigroup Builder where
++  Builder a <> Builder b = Builder (a <> b)
++
++instance Monoid Builder where
++  mempty = Builder mempty
++
++hPutBuilder :: Handle -> Builder -> IO ()
++hPutBuilder = coerce BL.hPut
++
++writeFile :: FilePath -> Builder -> IO ()
++writeFile = coerce BL.writeFile
++
++byteString :: B.StrictByteString -> Builder
++byteString = coerce
++
++lazyByteString :: BL.LazyByteString -> Builder
++lazyByteString = coerce
++
++shortByteString :: BS.ShortByteString -> Builder
++shortByteString = coerce
++
++int8 :: Int8 -> Builder
++int8 = word8 . unsafeCoerce
++
++word8 :: Word8 -> Builder
++word8 = Builder . BL.pack . pure
++
++int16BE :: Int16 -> Builder
++int16BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 8
++    , x .&. 0xff
++    ]
++
++int32BE :: Int32 -> Builder
++int32BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 24
++    , shiftR x 16 .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , x .&. 0xff
++    ]
++
++int64BE :: Int64 -> Builder
++int64BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 56
++    , shiftR x 48 .&. 0xff
++    , shiftR x 40 .&. 0xff
++    , shiftR x 32 .&. 0xff
++    , shiftR x 24 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , x .&. 0xff
++    ]
++
++word16BE :: Word16 -> Builder
++word16BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 8
++    , x .&. 0xff
++    ]
++
++word32BE :: Word32 -> Builder
++word32BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 24
++    , shiftR x 16 .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , x .&. 0xff
++    ]
++
++word64BE :: Word64 -> Builder
++word64BE x = Builder $ BL.pack $ fmap fromIntegral
++    [ shiftR x 56
++    , shiftR x 48 .&. 0xff
++    , shiftR x 40 .&. 0xff
++    , shiftR x 32 .&. 0xff
++    , shiftR x 24 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , x .&. 0xff
++    ]
++
++int16LE :: Int16 -> Builder
++int16LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8
++    ]
++
++int32LE :: Int32 -> Builder
++int32LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 24
++    ]
++
++int64LE :: Int64 -> Builder
++int64LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 24 .&. 0xff
++    , shiftR x 32 .&. 0xff
++    , shiftR x 40 .&. 0xff
++    , shiftR x 48 .&. 0xff
++    , shiftR x 56
++    ]
++
++word16LE :: Word16 -> Builder
++word16LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8
++    ]
++
++word32LE :: Word32 -> Builder
++word32LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 24
++    ]
++
++word64LE :: Word64 -> Builder
++word64LE x = Builder $ BL.pack $ fmap fromIntegral
++    [ x .&. 0xff
++    , shiftR x 8 .&. 0xff
++    , shiftR x 16 .&. 0xff
++    , shiftR x 24 .&. 0xff
++    , shiftR x 32 .&. 0xff
++    , shiftR x 40 .&. 0xff
++    , shiftR x 48 .&. 0xff
++    , shiftR x 56
++    ]
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index b2b49ca2..90b75fe3 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -44,6 +44,7 @@ library base
+         Data.Bool
+         Data.Bounded
+         Data.ByteString
++        Data.ByteString.Builder
+         Data.ByteString.Char8
+         Data.ByteString.Lazy
+         Data.ByteString.Lazy.Char8
+-- 
+2.47.2
+

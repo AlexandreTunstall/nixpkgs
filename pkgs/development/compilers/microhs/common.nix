@@ -1,4 +1,5 @@
 { version
+, mcabalVersion ? version
 , rev
 , hash
 }:
@@ -23,8 +24,31 @@ stdenv.mkDerivation {
   };
 
   patches = [
-    ./install-cabaldir.patch
-    ./cpphs-fixes.patch
+    patches/install-cabaldir.patch
+    patches/cpphs-fixes.patch
+    patches/lib/0001-Add-ioError-and-IOException.patch
+    (if lib.versionOlder version "0.12"
+      then patches/lib/0002-0.11-Add-mask-and-uninterruptibleMask.patch
+      else patches/lib/0002-Add-mask-and-uninterruptibleMask.patch)
+    patches/lib/0003-Add-assert.patch
+    patches/lib/0004-Add-strict-fmap.patch
+    patches/lib/0005-Add-Control.Monad.ST.Unsafe.patch
+    (if lib.versionOlder version "0.12.0.1"
+      then patches/lib/0006-0.11-Add-accursedUnutterablePerformIO.patch
+      else patches/lib/0006-Add-accursedUnutterablePerformIO.patch)
+    patches/lib/0007-Add-Data.ByteString.Lazy.patch
+    patches/lib/0008-Add-Data.ByteString.Lazy.Internal.patch
+    patches/lib/0009-Add-Data.ByteString.Short.patch
+    patches/lib/0010-Add-Data.ByteString.Unsafe.patch
+    patches/lib/0011-Add-Data.ByteString.Builder.patch
+    patches/lib/0012-Add-Data.ByteString.Builder.Prim.patch
+    patches/lib/0013-Add-Data.ByteString.Builder.Extra.patch
+    patches/lib/0014-Add-WrappedMonoid.patch
+    patches/lib/0015-Add-GHC.Float.patch
+    patches/lib/0016-Add-userError-to-Prelude.patch
+    (if lib.versionOlder version "0.12"
+      then patches/lib/0017-0.11-Add-withBinaryFile.patch
+      else patches/lib/0017-Add-withBinaryFile.patch)
   ] ++ lib.optionals (lib.versionAtLeast version "0.11.7.2") [
     (fetchpatch {
       name = "fix-mcabal-build.patch";
@@ -33,12 +57,9 @@ stdenv.mkDerivation {
       hash = "sha256-PyqFdAO2PGyse8KTDTKNwGM58ocdGTPXR9/Ni8Jpips=";
     })
   ] ++ lib.optionals (lib.versionOlder version "0.12") [
-    ./microcabal-parser-leniency.patch
-    ./lib-fixes.patch
+    patches/microcabal-parser-leniency.patch
   ] ++ lib.optionals (version == "0.12.0.0") [
-    ./remove-unicode-char-refs.patch
-  ] ++ lib.optionals (version == "0.12.3.0") [
-    ./lib-fixes-0.12.3.0.patch
+    patches/remove-unicode-char-refs.patch
   ];
 
   makeFlags = [
@@ -81,7 +102,7 @@ stdenv.mkDerivation {
   '';
 
   passthru = {
-    haskellCompilerName = "mhs-${version}";
+    haskellCompilerName = "mhs-${mcabalVersion}";
     targetPrefix = "";
     isMhs = true;
   };

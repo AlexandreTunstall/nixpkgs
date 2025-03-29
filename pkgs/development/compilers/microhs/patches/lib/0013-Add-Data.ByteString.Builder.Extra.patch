@@ -1,0 +1,37 @@
+From 8652fab5d2d979dde25197456b48142a287d26ae Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:18:48 +0000
+Subject: [PATCH] Add Data.ByteString.Builder.Extra
+
+---
+ lib/Data/ByteString/Builder/Extra.hs | 5 +++++
+ lib/libs.cabal                       | 1 +
+ 2 files changed, 6 insertions(+)
+ create mode 100644 lib/Data/ByteString/Builder/Extra.hs
+
+diff --git a/lib/Data/ByteString/Builder/Extra.hs b/lib/Data/ByteString/Builder/Extra.hs
+new file mode 100644
+index 00000000..b92dde7a
+--- /dev/null
++++ b/lib/Data/ByteString/Builder/Extra.hs
+@@ -0,0 +1,5 @@
++module Data.ByteString.Builder.Extra(module Data.ByteString.Builder.Extra) where
++import qualified Data.ByteString.Builder as B
++
++flush :: B.Builder
++flush = mempty
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index 661567a4..3b0c67ee 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -45,6 +45,7 @@ library base
+         Data.Bounded
+         Data.ByteString
+         Data.ByteString.Builder
++        Data.ByteString.Builder.Extra
+         Data.ByteString.Builder.Prim
+         Data.ByteString.Char8
+         Data.ByteString.Lazy
+-- 
+2.47.2
+

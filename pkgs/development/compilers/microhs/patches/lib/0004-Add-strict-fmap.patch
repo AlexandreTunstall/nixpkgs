@@ -1,0 +1,37 @@
+From 2d488c68c29e579a4e11fab81d556cc5d12db322 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 06:55:32 +0000
+Subject: [PATCH] Add strict fmap (<$!>)
+
+---
+ lib/Control/Monad.hs | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/lib/Control/Monad.hs b/lib/Control/Monad.hs
+index 8e019adb..6a6c3d28 100644
+--- a/lib/Control/Monad.hs
++++ b/lib/Control/Monad.hs
+@@ -13,6 +13,7 @@ module Control.Monad(
+   (=<<),
+   (>=>),
+   (<=<),
++  (<$!>),
+   forever,
+   void,
+   join,
+@@ -109,6 +110,12 @@ f <=< g = \ a -> do
+ (>=>) :: forall m a b c . Monad m => (a -> m b) -> (b -> m c) -> (a -> m c)
+ (>=>) = flip (<=<)
+ 
++(<$!>) :: Monad m => (a -> b) -> m a -> m b
++f <$!> m = do
++  x <- m
++  let z = f x
++  z `seq` return z
++
+ forever :: forall f a b . (Applicative f) => f a -> f b
+ forever a = let { a' = a *> a' } in a'
+ 
+-- 
+2.47.2
+

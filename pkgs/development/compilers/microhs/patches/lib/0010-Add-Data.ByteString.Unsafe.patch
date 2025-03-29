@@ -1,0 +1,54 @@
+From a2a936e14b133326dab24b42a74ff86c3be74173 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:13:15 +0000
+Subject: [PATCH] Add Data.ByteString.Unsafe
+
+---
+ lib/Data/ByteString/Unsafe.hs | 22 ++++++++++++++++++++++
+ lib/libs.cabal                |  1 +
+ 2 files changed, 23 insertions(+)
+ create mode 100644 lib/Data/ByteString/Unsafe.hs
+
+diff --git a/lib/Data/ByteString/Unsafe.hs b/lib/Data/ByteString/Unsafe.hs
+new file mode 100644
+index 00000000..4da1cc78
+--- /dev/null
++++ b/lib/Data/ByteString/Unsafe.hs
+@@ -0,0 +1,22 @@
++module Data.ByteString.Unsafe(module Data.ByteString.Unsafe) where
++import qualified Data.ByteString as B
++import Data.Word
++import Foreign.C.String (CString, CStringLen)
++
++unsafeHead :: B.ByteString -> Word8
++unsafeHead = B.head
++
++unsafeIndex :: B.ByteString -> Int -> Word8
++unsafeIndex = B.index
++
++unsafeTake :: Int -> B.ByteString -> B.ByteString
++unsafeTake = B.take
++
++unsafeDrop :: Int -> B.ByteString -> B.ByteString
++unsafeDrop = B.drop
++
++unsafeUseAsCString :: B.ByteString -> (CString -> IO a) -> IO a
++unsafeUseAsCString = B.useAsCString
++
++unsafeUseAsCStringLen :: B.ByteString -> (CStringLen -> IO a) -> IO a
++unsafeUseAsCStringLen = B.useAsCStringLen
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index 499bb9db..b2b49ca2 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -49,6 +49,7 @@ library base
+         Data.ByteString.Lazy.Char8
+         Data.ByteString.Lazy.Internal
+         Data.ByteString.Short
++        Data.ByteString.Unsafe
+         Data.Char
+         Data.Char.Unicode
+         Data.Coerce
+-- 
+2.47.2
+

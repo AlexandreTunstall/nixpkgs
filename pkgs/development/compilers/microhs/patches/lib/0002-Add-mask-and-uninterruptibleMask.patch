@@ -1,0 +1,49 @@
+From beaa7ad3bf2ad46cbe7b3e7de2605668a622f1a5 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 06:49:54 +0000
+Subject: [PATCH] Add mask and uninterruptibleMask
+
+---
+ lib/Control/Exception.hs          | 1 +
+ lib/Control/Exception/Internal.hs | 6 +++++-
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/lib/Control/Exception.hs b/lib/Control/Exception.hs
+index 45df70a8..28a503a5 100644
+--- a/lib/Control/Exception.hs
++++ b/lib/Control/Exception.hs
+@@ -14,6 +14,7 @@ module Control.Exception(
+   handle, handleJust,
+ 
+   bracket, finally, bracket_, bracketOnError,
++  mask, uninterruptibleMask,
+ 
+   try,
+   throwIO,
+diff --git a/lib/Control/Exception/Internal.hs b/lib/Control/Exception/Internal.hs
+index aa4516ae..e83feddb 100644
+--- a/lib/Control/Exception/Internal.hs
++++ b/lib/Control/Exception/Internal.hs
+@@ -2,7 +2,7 @@
+ -- See LICENSE file for full license.
+ module Control.Exception.Internal(
+   throw, catch,
+-  mask,
++  mask, uninterruptibleMask,
+   onException, throwIO, bracket,
+   Exception(..),
+   SomeException(..),
+@@ -58,6 +58,10 @@ bracket before after thing =
+ mask :: ((forall a. IO a -> IO a) -> IO b) -> IO b
+ mask io = io (\ x -> x)
+ 
++-- XXX we don't have uninterruptible masks yet either
++uninterruptibleMask :: ((forall a. IO a -> IO a) -> IO b) -> IO b
++uninterruptibleMask io = io (\ x -> x)
++
+ ------------------
+ 
+ data SomeException = forall e . Exception e => SomeException e
+-- 
+2.47.2
+

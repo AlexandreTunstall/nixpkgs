@@ -1,0 +1,31 @@
+From 00e8d8eadbce3cc979453eee9338ddf46cbb11ed Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:05:39 +0000
+Subject: [PATCH] Add accursedUnutterablePerformIO
+
+---
+ lib/Data/ByteString/Internal.hs | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/lib/Data/ByteString/Internal.hs b/lib/Data/ByteString/Internal.hs
+index a54a0865..c9c22e1d 100644
+--- a/lib/Data/ByteString/Internal.hs
++++ b/lib/Data/ByteString/Internal.hs
+@@ -16,6 +16,7 @@ import Data.Ord
+ import Data.String
+ import Data.Word (Word8)
+ import Foreign.C.Types (CChar)
++import System.IO.Unsafe
+ import Text.Show
+ 
+ data ByteString  -- primitive type
+@@ -122,3 +123,6 @@ unpack = primBSunpack
+ 
+ null :: ByteString -> Bool
+ null bs = length bs == 0
++
++accursedUnutterablePerformIO :: IO a -> a
++accursedUnutterablePerformIO = unsafePerformIO
+-- 
+2.47.2
+

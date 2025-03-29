@@ -1,0 +1,384 @@
+From 91a9e67e970917bc4c66f5f4db636162166e91fd Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:12:14 +0000
+Subject: [PATCH] Add Data.ByteString.Short
+
+---
+ lib/Data/ByteString/Short.hs | 352 +++++++++++++++++++++++++++++++++++
+ lib/libs.cabal               |   1 +
+ 2 files changed, 353 insertions(+)
+ create mode 100644 lib/Data/ByteString/Short.hs
+
+diff --git a/lib/Data/ByteString/Short.hs b/lib/Data/ByteString/Short.hs
+new file mode 100644
+index 00000000..e84a0b72
+--- /dev/null
++++ b/lib/Data/ByteString/Short.hs
+@@ -0,0 +1,352 @@
++module Data.ByteString.Short(module Data.ByteString.Short) where
++import qualified Data.ByteString as B
++import Data.Coerce
++import Data.List.NonEmpty
++import Data.Word(Word8)
++import Foreign.C.String (CString, CStringLen)
++import System.IO(Handle)
++
++newtype ShortByteString = BS { fromShort :: B.ByteString }
++  deriving (Eq, Ord)
++
++instance Show ShortByteString where
++  showsPrec p (BS bs) = showsPrec p bs
++
++instance IsString ShortByteString where
++  fromString = BS . fromString
++
++instance Semigroup ShortByteString where
++  BS a <> BS b = BS (a <> b)
++
++instance Monoid ShortByteString where
++  mempty = BS mempty
++
++toShort :: B.ByteString -> ShortByteString
++toShort = BS
++
++empty :: ShortByteString
++empty = coerce B.empty
++
++singleton :: Word8 -> ShortByteString
++singleton = coerce B.singleton
++
++pack :: [Word8] -> ShortByteString
++pack = coerce B.pack
++
++unpack :: ShortByteString -> [Word8]
++unpack = coerce B.unpack
++
++cons :: Word8 -> ShortByteString -> ShortByteString
++cons = coerce B.cons
++
++snoc :: ShortByteString -> Word8 -> ShortByteString
++snoc = coerce B.snoc
++
++append :: ShortByteString -> ShortByteString -> ShortByteString
++append = coerce B.append
++
++head :: ShortByteString -> Word8
++head = coerce B.head
++
++tail :: ShortByteString -> ShortByteString
++tail = coerce B.tail
++
++length :: ShortByteString -> Int
++length = coerce B.length
++
++uncons :: ShortByteString -> Maybe (Word8, ShortByteString)
++uncons = coerce B.uncons
++
++last :: ShortByteString -> Word8
++last = coerce B.last
++
++init :: ShortByteString -> ShortByteString
++init = coerce B.init
++
++unsnoc :: ShortByteString -> Maybe (ShortByteString, Word8)
++unsnoc = coerce B.unsnoc
++
++null :: ShortByteString -> Bool
++null = coerce B.null
++
++map :: (Word8 -> Word8) -> ShortByteString -> ShortByteString
++map = coerce B.map
++
++reverse :: ShortByteString -> ShortByteString
++reverse = coerce B.reverse
++
++intersperse :: Word8 -> ShortByteString -> ShortByteString
++intersperse = coerce B.intersperse
++
++transpose :: [ShortByteString] -> [ShortByteString]
++transpose = coerce B.transpose
++
++foldl :: (a -> Word8 -> a) -> a -> ShortByteString -> a
++foldl f z x = B.foldl (coerce f) z (coerce x)
++
++foldl' :: (a -> Word8 -> a) -> a -> ShortByteString -> a
++foldl' f z x = B.foldl' (coerce f) z (coerce x)
++
++foldr :: (Word8 -> a -> a) -> a -> ShortByteString -> a
++foldr f z x = B.foldr (coerce f) z (coerce x)
++
++foldr' :: (Word8 -> a -> a) -> a -> ShortByteString -> a
++foldr' f z x = B.foldr' (coerce f) z (coerce x)
++
++foldl1 :: (Word8 -> Word8 -> Word8) -> ShortByteString -> Word8
++foldl1 = coerce B.foldl1
++
++foldl1' :: (Word8 -> Word8 -> Word8) -> ShortByteString -> Word8
++foldl1' = coerce B.foldl1'
++
++foldr1 :: (Word8 -> Word8 -> Word8) -> ShortByteString -> Word8
++foldr1 = coerce B.foldr1
++
++foldr1' :: (Word8 -> Word8 -> Word8) -> ShortByteString -> Word8
++foldr1' = coerce B.foldr1'
++
++concat :: [ShortByteString] -> ShortByteString
++concat = coerce B.concat
++
++concatMap :: (Word8 -> ShortByteString) -> ShortByteString -> ShortByteString
++concatMap = coerce B.concatMap
++
++any :: (Word8 -> Bool) -> ShortByteString -> Bool
++any = coerce B.any
++
++all :: (Word8 -> Bool) -> ShortByteString -> Bool
++all = coerce B.all
++
++maximum :: ShortByteString -> Word8
++maximum = coerce B.maximum
++
++minimum :: ShortByteString -> Word8
++minimum = coerce B.minimum
++
++mapAccumL :: (acc -> Word8 -> (acc, Word8)) -> acc -> ShortByteString -> (acc, ShortByteString)
++mapAccumL f s x = coerce (B.mapAccumL (coerce f) s (coerce x))
++
++mapAccumR :: (acc -> Word8 -> (acc, Word8)) -> acc -> ShortByteString -> (acc, ShortByteString)
++mapAccumR f s x = coerce (B.mapAccumR (coerce f) s (coerce x))
++
++scanl1 :: (Word8 -> Word8 -> Word8) -> ShortByteString -> ShortByteString
++scanl1 = coerce B.scanl1
++
++scanr1 :: (Word8 -> Word8 -> Word8) -> ShortByteString -> ShortByteString
++scanr1 = coerce B.scanr1
++
++replicate :: Int -> Word8 -> ShortByteString
++replicate = coerce B.replicate
++
++unfoldr :: (a -> Maybe (Word8, a)) -> a -> ShortByteString
++unfoldr f a = coerce (B.unfoldr (coerce f) a)
++
++unfoldrN :: Int -> (a -> Maybe (Word8, a)) -> a -> (ShortByteString, Maybe a)
++unfoldrN n f a = coerce (B.unfoldrN n (coerce f) a)
++
++take :: Int -> ShortByteString -> ShortByteString
++take = coerce B.take
++
++takeEnd :: Int -> ShortByteString -> ShortByteString
++takeEnd = coerce B.takeEnd
++
++drop  :: Int -> ShortByteString -> ShortByteString
++drop = coerce B.drop
++
++dropEnd :: Int -> ShortByteString -> ShortByteString
++dropEnd = coerce B.dropEnd
++
++splitAt :: Int -> ShortByteString -> (ShortByteString, ShortByteString)
++splitAt = coerce B.splitAt
++
++takeWhile :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++takeWhile = coerce B.takeWhile
++
++takeWhileEnd :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++takeWhileEnd = coerce B.takeWhileEnd
++
++dropWhile :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++dropWhile = coerce B.dropWhile
++
++dropWhileEnd :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++dropWhileEnd = coerce B.dropWhileEnd
++
++break :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++break = coerce B.break
++
++breakEnd :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++breakEnd = coerce B.breakEnd
++
++span :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++span = coerce B.span
++
++spanEnd :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++spanEnd = coerce B.spanEnd
++
++splitWith :: (Word8 -> Bool) -> ShortByteString -> [ShortByteString]
++splitWith = coerce B.splitWith
++
++split :: Word8 -> ShortByteString -> [ShortByteString]
++split = coerce B.split
++
++group :: ShortByteString -> [ShortByteString]
++group = coerce B.group
++
++groupBy :: (Word8 -> Word8 -> Bool) -> ShortByteString -> [ShortByteString]
++groupBy = coerce B.groupBy
++
++intercalate :: ShortByteString -> [ShortByteString] -> ShortByteString
++intercalate = coerce B.intercalate
++
++index :: ShortByteString -> Int -> Word8
++index = coerce B.index
++
++indexMaybe :: ShortByteString -> Int -> Maybe Word8
++indexMaybe = coerce B.indexMaybe
++
++(!?) :: ShortByteString -> Int -> Maybe Word8
++(!?) = coerce (B.!?)
++
++elemIndex :: Word8 -> ShortByteString -> Maybe Int
++elemIndex = coerce B.elemIndex
++
++elemIndexEnd :: Word8 -> ShortByteString -> Maybe Int
++elemIndexEnd = coerce B.elemIndexEnd
++
++elemIndices :: Word8 -> ShortByteString -> [Int]
++elemIndices = coerce B.elemIndices
++
++count :: Word8 -> ShortByteString -> Int
++count = coerce B.count
++
++findIndex :: (Word8 -> Bool) -> ShortByteString -> Maybe Int
++findIndex = coerce B.findIndex
++
++findIndexEnd :: (Word8 -> Bool) -> ShortByteString -> Maybe Int
++findIndexEnd = coerce B.findIndexEnd
++
++findIndices :: (Word8 -> Bool) -> ShortByteString -> [Int]
++findIndices = coerce B.findIndices
++
++elem :: Word8 -> ShortByteString -> Bool
++elem = coerce B.elem
++
++notElem :: Word8 -> ShortByteString -> Bool
++notElem = coerce B.notElem
++
++filter :: (Word8 -> Bool) -> ShortByteString -> ShortByteString
++filter = coerce B.filter
++
++find :: (Word8 -> Bool) -> ShortByteString -> Maybe Word8
++find = coerce B.find
++
++partition :: (Word8 -> Bool) -> ShortByteString -> (ShortByteString, ShortByteString)
++partition = coerce B.partition
++
++isPrefixOf :: ShortByteString -> ShortByteString -> Bool
++isPrefixOf = coerce B.isPrefixOf
++
++stripPrefix :: ShortByteString -> ShortByteString -> Maybe ShortByteString
++stripPrefix = coerce B.stripPrefix
++
++isSuffixOf :: ShortByteString -> ShortByteString -> Bool
++isSuffixOf = coerce B.isSuffixOf
++
++stripSuffix :: ShortByteString -> ShortByteString -> Maybe ShortByteString
++stripSuffix = coerce B.stripSuffix
++
++isInfixOf :: ShortByteString -> ShortByteString -> Bool
++isInfixOf = coerce B.isInfixOf
++
++isValidUtf8 :: ShortByteString -> Bool
++isValidUtf8 = coerce B.isValidUtf8
++
++breakSubstring :: ShortByteString -> ShortByteString -> (ShortByteString,ShortByteString)
++breakSubstring = coerce B.breakSubstring
++
++zip :: ShortByteString -> ShortByteString -> [(Word8,Word8)]
++zip = coerce B.zip
++
++zipWith :: (Word8 -> Word8 -> a) -> ShortByteString -> ShortByteString -> [a]
++zipWith f x y = B.zipWith (coerce f) (coerce x) (coerce y)
++
++packZipWith :: (Word8 -> Word8 -> Word8) -> ShortByteString -> ShortByteString -> ShortByteString
++packZipWith = coerce B.packZipWith
++
++unzip :: [(Word8,Word8)] -> (ShortByteString,ShortByteString)
++unzip = coerce B.unzip
++
++inits :: ShortByteString -> [ShortByteString]
++inits = coerce B.inits
++
++initsNE :: ShortByteString -> NonEmpty ShortByteString
++initsNE = coerce B.initsNE
++
++tails :: ShortByteString -> [ShortByteString]
++tails = coerce B.tails
++
++tailsNE :: ShortByteString -> NonEmpty ShortByteString
++tailsNE = coerce B.tailsNE
++
++sort :: ShortByteString -> ShortByteString
++sort = coerce B.sort
++
++copy :: ShortByteString -> ShortByteString
++copy = coerce B.copy
++
++getLine :: IO ShortByteString
++getLine = coerce B.getLine
++
++hGetLine :: Handle -> IO ShortByteString
++hGetLine = coerce B.hGetLine
++
++hPut :: Handle -> ShortByteString -> IO ()
++hPut = coerce B.hPut
++
++hPutNonBlocking :: Handle -> ShortByteString -> IO ShortByteString
++hPutNonBlocking = coerce B.hPutNonBlocking
++
++hPutStr :: Handle -> ShortByteString -> IO ()
++hPutStr = coerce B.hPutStr
++
++putStr :: ShortByteString -> IO ()
++putStr = coerce B.putStr
++
++hGet :: Handle -> Int -> IO ShortByteString
++hGet = coerce B.hGet
++
++hGetNonBlocking :: Handle -> Int -> IO ShortByteString
++hGetNonBlocking = coerce B.hGetNonBlocking
++
++hGetSome :: Handle -> Int -> IO ShortByteString
++hGetSome = coerce B.hGetSome
++
++hGetContents :: Handle -> IO ShortByteString
++hGetContents = coerce B.hGetContents
++
++getContents :: IO ShortByteString
++getContents = coerce B.getContents
++
++interact :: (ShortByteString -> ShortByteString) -> IO ()
++interact = coerce B.interact
++
++readFile :: FilePath -> IO ShortByteString
++readFile = coerce B.readFile
++
++writeFile :: FilePath -> ShortByteString -> IO ()
++writeFile = coerce B.writeFile
++
++appendFile :: FilePath -> ShortByteString -> IO ()
++appendFile = coerce B.appendFile
++
++packCString :: CString -> IO ShortByteString
++packCString = coerce B.packCString
++
++packCStringLen :: CStringLen -> IO ShortByteString
++packCStringLen = coerce B.packCStringLen
++
++useAsCString :: ShortByteString -> (CString -> IO a) -> IO a
++useAsCString = B.useAsCString . coerce
++
++useAsCStringLen :: ShortByteString -> (CStringLen -> IO a) -> IO a
++useAsCStringLen = B.useAsCStringLen . coerce
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index b83b408f..499bb9db 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -48,6 +48,7 @@ library base
+         Data.ByteString.Lazy
+         Data.ByteString.Lazy.Char8
+         Data.ByteString.Lazy.Internal
++        Data.ByteString.Short
+         Data.Char
+         Data.Char.Unicode
+         Data.Coerce
+-- 
+2.47.2
+

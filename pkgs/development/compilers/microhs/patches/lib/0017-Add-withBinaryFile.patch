@@ -1,0 +1,25 @@
+From c05427e42198517293167964836d4f176be8a1fd Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:24:34 +0000
+Subject: [PATCH] Add withBinaryFile
+
+---
+ lib/System/IO.hs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/System/IO.hs b/lib/System/IO.hs
+index 5b3deabc..d68dcae3 100644
+--- a/lib/System/IO.hs
++++ b/lib/System/IO.hs
+@@ -23,7 +23,7 @@ module System.IO(
+ 
+   openTmpFile, openTempFile, openBinaryTempFile,
+ 
+-  withFile,
++  withFile, withBinaryFile,
+ 
+   BufferMode(..),
+   hSetBuffering,
+-- 
+2.47.2
+

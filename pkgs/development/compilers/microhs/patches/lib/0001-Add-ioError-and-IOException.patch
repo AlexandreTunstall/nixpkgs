@@ -1,0 +1,33 @@
+From 563712e82e5b0197f85d0be8dcbca452b8913d3b Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 06:45:22 +0000
+Subject: [PATCH] Add ioError and IOException
+
+---
+ lib/Control/Exception.hs | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/lib/Control/Exception.hs b/lib/Control/Exception.hs
+index db5fdfb5..45df70a8 100644
+--- a/lib/Control/Exception.hs
++++ b/lib/Control/Exception.hs
+@@ -5,6 +5,8 @@ module Control.Exception(
+   throw,
+   SomeException,
+   Exception(..),
++  IOException,
++  ioError,
+   --
+   Handler(..), catches,
+   --
+@@ -25,6 +27,7 @@ module Control.Exception(
+ import qualified Prelude(); import MiniPrelude
+ import Control.Exception.Internal
+ import {-# SOURCE #-} Data.Typeable
++import System.IO.Error
+ import System.IO.Unsafe
+ 
+ -- This is the function called by the runtime.
+-- 
+2.47.2
+

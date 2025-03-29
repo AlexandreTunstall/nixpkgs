@@ -1,0 +1,144 @@
+From c665dafbcad2f07b4cea25bef2e73b56cfd82a29 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:14:38 +0000
+Subject: [PATCH] Add Data.ByteString.Builder.Prim
+
+---
+ lib/Data/ByteString/Builder/Prim.hs | 112 ++++++++++++++++++++++++++++
+ lib/libs.cabal                      |   1 +
+ 2 files changed, 113 insertions(+)
+ create mode 100644 lib/Data/ByteString/Builder/Prim.hs
+
+diff --git a/lib/Data/ByteString/Builder/Prim.hs b/lib/Data/ByteString/Builder/Prim.hs
+new file mode 100644
+index 00000000..50a370f5
+--- /dev/null
++++ b/lib/Data/ByteString/Builder/Prim.hs
+@@ -0,0 +1,112 @@
++module Data.ByteString.Builder.Prim(module Data.ByteString.Builder.Prim) where
++import Data.Bits
++import qualified Data.ByteString.Lazy as BL
++import qualified Data.ByteString.Builder as B
++import Data.Char
++import Data.Coerce
++import Data.Foldable
++import Data.Int
++import Data.Word
++
++class Monoidal f where
++  (>*<) :: f a -> f b -> f (a, b)
++
++instance Monoidal FixedPrim where
++  FixedPrim f >*< FixedPrim g = FixedPrim $ \(x, y) -> f x <> g y
++
++instance Monoidal BoundedPrim where
++  BoundedPrim f >*< BoundedPrim g = BoundedPrim $ \(x, y) -> f x <> g y
++
++newtype BoundedPrim a = BoundedPrim (a -> B.Builder)
++
++primBounded :: BoundedPrim a -> a -> B.Builder
++primBounded (BoundedPrim f) = f
++
++primMapListBounded :: BoundedPrim a -> [a] -> B.Builder
++primMapListBounded (BoundedPrim f) = foldMap f
++
++charUtf8 :: BoundedPrim Char
++charUtf8 = BoundedPrim $ \c
++  -> B.Builder $ BL.pack $ fromIntegral <$> case ord c of
++    x | x <= 0x7f -> [x]
++      | x <= 0x07ff -> [shiftR x 6 + 0xc0, x .&. 0x3f + 0x80]
++      | x <= 0xffff -> [shiftR x 12 + 0xe0, shiftR x 6 .&. 0x3f + 0x80
++        , x .&. 0x3f + 0x80]
++      | otherwise -> [shiftR x 18 + 0xf0, shiftR x 12 .&. 0xf3 + 0x80
++        , shiftR x 6 .&. 0x3f + 0x80, x .&. 0x3f + 0x80]
++
++newtype FixedPrim a = FixedPrim (a -> B.Builder)
++
++primFixed :: FixedPrim a -> a -> B.Builder
++primFixed (FixedPrim f) = f
++
++primMapListFixed :: FixedPrim a -> [a] -> B.Builder
++primMapListFixed (FixedPrim f) = foldMap f
++
++int8 :: FixedPrim Int8
++int8 = FixedPrim B.int8
++
++word8 :: FixedPrim Word8
++word8 = FixedPrim B.word8
++
++int16BE :: FixedPrim Int16
++int16BE = FixedPrim B.int16BE
++
++int32BE :: FixedPrim Int32
++int32BE = FixedPrim B.int32BE
++
++int64BE :: FixedPrim Int64
++int64BE = FixedPrim B.int64BE
++
++word16BE :: FixedPrim Word16
++word16BE = FixedPrim B.word16BE
++
++word32BE :: FixedPrim Word32
++word32BE = FixedPrim B.word32BE
++
++word64BE :: FixedPrim Word64
++word64BE = FixedPrim B.word64BE
++
++int16LE :: FixedPrim Int16
++int16LE = FixedPrim B.int16LE
++
++int32LE :: FixedPrim Int32
++int32LE = FixedPrim B.int32LE
++
++int64LE :: FixedPrim Int64
++int64LE = FixedPrim B.int64LE
++
++word16LE :: FixedPrim Word16
++word16LE = FixedPrim B.word16LE
++
++word32LE :: FixedPrim Word32
++word32LE = FixedPrim B.word32LE
++
++word64LE :: FixedPrim Word64
++word64LE = FixedPrim B.word64LE
++
++-- FIXME: We assume little-endian. This might cause bugs on big-endian hardware.
++
++intHost :: FixedPrim Int
++intHost = coerce int64Host
++
++int16Host :: FixedPrim Int16
++int16Host = int16LE
++
++int32Host :: FixedPrim Int32
++int32Host = int32LE
++
++int64Host :: FixedPrim Int64
++int64Host = int64LE
++
++wordHost :: FixedPrim Word
++wordHost = coerce word64Host
++
++word16Host :: FixedPrim Word16
++word16Host = word16LE
++
++word32Host :: FixedPrim Word32
++word32Host = word32LE
++
++word64Host :: FixedPrim Word64
++word64Host = word64LE
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index 90b75fe3..661567a4 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -45,6 +45,7 @@ library base
+         Data.Bounded
+         Data.ByteString
+         Data.ByteString.Builder
++        Data.ByteString.Builder.Prim
+         Data.ByteString.Char8
+         Data.ByteString.Lazy
+         Data.ByteString.Lazy.Char8
+-- 
+2.47.2
+

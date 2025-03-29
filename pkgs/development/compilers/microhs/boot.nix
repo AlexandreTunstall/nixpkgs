@@ -17,7 +17,7 @@ in (microhs-src.override {
 }).overrideAttrs (old: {
   version = "${old.version}-hugs";
 
-  patches = (old.patches or []) ++ [ ./hugs.patch ];
+  patches = (old.patches or []) ++ [ patches/hugs.patch ];
 
   nativeBuildInputs = [ hugs ];
 

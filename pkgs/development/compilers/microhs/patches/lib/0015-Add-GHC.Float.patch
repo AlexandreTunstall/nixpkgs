@@ -1,0 +1,51 @@
+From 587bb22e34a4de5f505552b01f26cf79c0c0d3ae Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:22:45 +0000
+Subject: [PATCH] Add GHC.Float
+
+---
+ lib/GHC/Float.hs | 19 +++++++++++++++++++
+ lib/libs.cabal   |  1 +
+ 2 files changed, 20 insertions(+)
+ create mode 100644 lib/GHC/Float.hs
+
+diff --git a/lib/GHC/Float.hs b/lib/GHC/Float.hs
+new file mode 100644
+index 00000000..fa40054a
+--- /dev/null
++++ b/lib/GHC/Float.hs
+@@ -0,0 +1,19 @@
++module GHC.Float(module GHC.Float) where
++import Primitives
++import Data.Coerce
++import Data.Double
++import Data.Float
++import Data.Word
++import Unsafe.Coerce
++
++castFloatToWord32 :: Float -> Word32
++castFloatToWord32 = coerce (unsafeCoerce :: FloatW -> Word)
++
++castWord32ToFloat :: Word32 -> Float
++castWord32ToFloat = coerce (unsafeCoerce :: Word -> FloatW)
++
++castDoubleToWord64 :: Double -> Word64
++castDoubleToWord64 = coerce (unsafeCoerce :: FloatW -> Word)
++
++castWord64ToDouble :: Word64 -> Double
++castWord64ToDouble = coerce (unsafeCoerce :: Word -> FloatW)
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index 3b0c67ee..17e5874f 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -133,6 +133,7 @@ library base
+         Foreign.Marshal.Utils
+         Foreign.Ptr
+         Foreign.Storable
++        GHC.Float
+         GHC.Generics
+         GHC.Stack
+         GHC.Types
+-- 
+2.47.2
+

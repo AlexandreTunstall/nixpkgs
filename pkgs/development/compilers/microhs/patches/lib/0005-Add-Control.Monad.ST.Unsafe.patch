@@ -1,0 +1,37 @@
+From 0958fe9a7fad534fb95a0a5c3c7744d5bc2ab8ec Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 06:58:43 +0000
+Subject: [PATCH] Add Control.Monad.ST.Unsafe
+
+---
+ lib/Control/Monad/ST/Unsafe.hs | 5 +++++
+ lib/libs.cabal                 | 1 +
+ 2 files changed, 6 insertions(+)
+ create mode 100644 lib/Control/Monad/ST/Unsafe.hs
+
+diff --git a/lib/Control/Monad/ST/Unsafe.hs b/lib/Control/Monad/ST/Unsafe.hs
+new file mode 100644
+index 00000000..ac2c6617
+--- /dev/null
++++ b/lib/Control/Monad/ST/Unsafe.hs
+@@ -0,0 +1,5 @@
++module Control.Monad.ST.Unsafe(module Control.Monad.ST.Unsafe) where
++import Control.Monad.ST_Type
++
++unsafeIOToST :: IO a -> ST s a
++unsafeIOToST = ST
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index fdff6168..3ea464cd 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -34,6 +34,7 @@ library base
+         Control.Monad.Fix
+         Control.Monad.IO.Class
+         Control.Monad.ST
++        Control.Monad.ST.Unsafe
+         Control.Monad.Zip
+         Data.Array
+         Data.Bifoldable
+-- 
+2.47.2
+

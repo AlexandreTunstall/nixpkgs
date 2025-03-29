@@ -1,0 +1,25 @@
+From 7f410e7459371263b735a87187dd98f248981743 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:23:46 +0000
+Subject: [PATCH] Add userError to Prelude
+
+---
+ lib/Prelude.hs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/Prelude.hs b/lib/Prelude.hs
+index b5988fd5..b56128f9 100644
+--- a/lib/Prelude.hs
++++ b/lib/Prelude.hs
+@@ -86,7 +86,7 @@ import Data.Word(Word)
+ import System.IO(IO, putChar, putStr, putStrLn, print, getLine, getContents, interact,
+                  FilePath, readFile, writeFile, appendFile,
+                  cprint, cuprint)
+-import System.IO.Error(IOError)
++import System.IO.Error(IOError, userError)
+ import Text.Read(ReadS, Read(..), read, reads, readParen, lex)
+ import Text.Show(Show(..), ShowS, shows, showChar, showString, showParen)
+ import Primitives(_wordSize, _isWindows)
+-- 
+2.47.2
+

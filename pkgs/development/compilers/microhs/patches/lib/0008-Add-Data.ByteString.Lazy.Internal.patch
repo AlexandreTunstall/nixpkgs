@@ -1,0 +1,53 @@
+From e197d3c39616264b08b48b46ec8712a0b8a5b249 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:10:56 +0000
+Subject: [PATCH] Add Data.ByteString.Lazy.Internal
+
+---
+ lib/Data/ByteString/Lazy/Internal.hs | 21 +++++++++++++++++++++
+ lib/libs.cabal                       |  1 +
+ 2 files changed, 22 insertions(+)
+ create mode 100644 lib/Data/ByteString/Lazy/Internal.hs
+
+diff --git a/lib/Data/ByteString/Lazy/Internal.hs b/lib/Data/ByteString/Lazy/Internal.hs
+new file mode 100644
+index 00000000..15e7c43e
+--- /dev/null
++++ b/lib/Data/ByteString/Lazy/Internal.hs
+@@ -0,0 +1,21 @@
++module Data.ByteString.Lazy.Internal(module Data.ByteString.Lazy.Internal, BL.ByteString) where
++import qualified Data.ByteString as B
++import qualified Data.ByteString.Lazy as BL
++import Data.Coerce
++
++toChunks :: BL.LazyByteString -> [B.StrictByteString]
++toChunks = pure . coerce
++
++pattern Empty :: BL.LazyByteString
++pattern Empty <- (BL.null -> True)
++  where Empty = mempty
++
++pattern Chunk :: B.StrictByteString -> BL.LazyByteString -> BL.LazyByteString
++pattern Chunk b bs <- (toChunks -> b : (BL.fromChunks -> bs))
++  where Chunk = chunk
++
++chunk :: B.StrictByteString -> BL.LazyByteString -> BL.LazyByteString
++chunk b bs = coerce b <> bs
++
++defaultChunkSize :: Int
++defaultChunkSize = 32768
+diff --git a/lib/libs.cabal b/lib/libs.cabal
+index 859442ea..b83b408f 100644
+--- a/lib/libs.cabal
++++ b/lib/libs.cabal
+@@ -47,6 +47,7 @@ library base
+         Data.ByteString.Char8
+         Data.ByteString.Lazy
+         Data.ByteString.Lazy.Char8
++        Data.ByteString.Lazy.Internal
+         Data.Char
+         Data.Char.Unicode
+         Data.Coerce
+-- 
+2.47.2
+

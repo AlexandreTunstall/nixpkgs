@@ -1,0 +1,38 @@
+From 58c7875a60f2f1e874abf7e3c457e79058b21e99 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:21:41 +0000
+Subject: [PATCH] Add WrappedMonoid
+
+---
+ lib/Data/Semigroup.hs | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/lib/Data/Semigroup.hs b/lib/Data/Semigroup.hs
+index d1288234..f54c280c 100644
+--- a/lib/Data/Semigroup.hs
++++ b/lib/Data/Semigroup.hs
+@@ -1,5 +1,6 @@
+ module Data.Semigroup(
+   Semigroup(..),
++  WrappedMonoid(..),
+   Endo(..),
+   Dual(..),
+   Max(..),
+@@ -27,6 +28,14 @@ import Data.Monoid.Internal
+ import Data.Records
+ import Text.Show
+ 
++newtype WrappedMonoid a = WrapMonoid { unwrapMonoid :: a }
++
++instance Monoid a => Semigroup (WrappedMonoid a) where
++  WrapMonoid a <> WrapMonoid b = WrapMonoid (a <> b)
++
++instance Monoid a => Monoid (WrappedMonoid a) where
++  mempty = WrapMonoid mempty
++
+ {-
+ newtype First a = First { getFirst :: a }
+   deriving ( Bounded  -- ^ @since 4.9.0.0
+-- 
+2.47.2
+

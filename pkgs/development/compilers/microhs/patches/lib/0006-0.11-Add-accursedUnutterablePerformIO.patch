@@ -1,0 +1,31 @@
+From bebcaa3669711304525c921dd3ec2605cd244425 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Fri, 28 Mar 2025 07:05:39 +0000
+Subject: [PATCH 1/1] Add accursedUnutterablePerformIO
+
+---
+ lib/Data/ByteString/Internal.hs | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/lib/Data/ByteString/Internal.hs b/lib/Data/ByteString/Internal.hs
+index bf577ba7..34554537 100644
+--- a/lib/Data/ByteString/Internal.hs
++++ b/lib/Data/ByteString/Internal.hs
+@@ -2,6 +2,7 @@ module Data.ByteString.Internal(module Data.ByteString.Internal) where
+ import qualified Prelude(); import MiniPrelude hiding(length)
+ import Control.DeepSeq.Class
+ import Data.Word(Word8)
++import System.IO.Unsafe
+ 
+ data ByteString  -- primitive type
+ 
+@@ -94,3 +95,6 @@ unpack = primBSunpack
+ 
+ null :: ByteString -> Bool
+ null bs = length bs == 0
++
++accursedUnutterablePerformIO :: IO a -> a
++accursedUnutterablePerformIO = unsafePerformIO
+-- 
+2.47.2
+
