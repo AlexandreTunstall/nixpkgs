@@ -1,0 +1,961 @@
+diff --git a/compiler/ghc.cabal.in b/compiler/ghc.cabal.in
+index e0aee80540..c02d30957a 100644
+--- a/compiler/ghc.cabal.in
++++ b/compiler/ghc.cabal.in
+@@ -54,17 +54,15 @@ Library
+                    containers >= 0.5 && < 0.6,
+                    array      >= 0.1 && < 0.6,
+                    filepath   >= 1   && < 1.5,
+-                   template-haskell == 2.11.*,
+-                   hpc        == 0.6.*,
+                    transformers == 0.5.*,
+                    ghc-boot   == @ProjectVersionMunged@,
+                    ghc-boot-th == @ProjectVersionMunged@,
+-                   hoopl      >= 3.10.2 && < 3.11
+ 
+-    if os(windows)
+-        Build-Depends: Win32  == 2.3.*
+-    else
+-        Build-Depends: unix   == 2.7.*
++    if !impl(mhs)
++        if os(windows)
++            Build-Depends: Win32  == 2.3.*
++        else
++            Build-Depends: unix   == 2.7.*
+ 
+     if flag(ghci)
+         Build-Depends: ghci == @ProjectVersionMunged@
+@@ -118,6 +116,7 @@ Library
+ 
+     if flag(stage1)
+         Include-Dirs: stage1
++        hs-source-dirs: stage1/build
+     else
+         if flag(stage2)
+             Include-Dirs: stage2
+@@ -128,9 +127,9 @@ Library
+     Install-Includes: HsVersions.h, ghc_boot_platform.h
+ 
+     c-sources:
+-        parser/cutils.c
+-        ghci/keepCAFsForGHCi.c
+-        cbits/genSym.c
++        parser/cutils.c,
++        ghci/keepCAFsForGHCi.c,
++        cbits/genSym.c,
+ 
+     hs-source-dirs:
+         basicTypes
+diff --git a/compiler/ghc.mk b/compiler/ghc.mk
+index 0da54449d2..b1190667a1 100644
+--- a/compiler/ghc.mk
++++ b/compiler/ghc.mk
+@@ -45,7 +45,7 @@ compiler/stage2/build/DynFlags.o: $(includes_GHCCONSTANTS_HASKELL_WRAPPERS)
+ compiler/stage3/build/DynFlags.o: $(includes_GHCCONSTANTS_HASKELL_WRAPPERS)
+ endif
+ 
+-compiler/stage%/build/Config.hs : mk/config.mk mk/project.mk | $$(dir $$@)/.
++compiler/stage%/build/Config.hs : mk/config.mk mk/project.mk
+ 	$(call removeFiles,$@)
+ 	@echo 'Creating $@ ... '
+ 	@echo '{-# LANGUAGE CPP #-}'                                        >> $@
+@@ -81,16 +81,14 @@ compiler/stage%/build/Config.hs : mk/config.mk mk/project.mk | $$(dir $$@)/.
+ 	@echo 'cBooterVersion        :: String'                             >> $@
+ 	@echo 'cBooterVersion        = "$(GhcVersion)"'                     >> $@
+ 	@echo 'cStage                :: String'                             >> $@
+-	@echo 'cStage                = show (STAGE :: Int)'                 >> $@
++	@echo 'cStage                = show (1 :: Int)'                 >> $@
+ 	@echo 'cIntegerLibrary       :: String'                             >> $@
+ 	@echo 'cIntegerLibrary       = "$(INTEGER_LIBRARY)"'                >> $@
+ 	@echo 'cIntegerLibraryType   :: IntegerLibrary'                     >> $@
+ ifeq "$(INTEGER_LIBRARY)" "integer-gmp"
+ 	@echo 'cIntegerLibraryType   = IntegerGMP'                          >> $@
+-else ifeq "$(INTEGER_LIBRARY)" "integer-simple"
++else
+ 	@echo 'cIntegerLibraryType   = IntegerSimple'                       >> $@
+-else ifneq "$(CLEANING)" "YES"
+-$(error Unknown integer library)
+ endif
+ 	@echo 'cSupportsSplitObjs    :: String'                             >> $@
+ 	@echo 'cSupportsSplitObjs    = "$(SupportsSplitObjs)"'              >> $@
+@@ -150,7 +148,7 @@ endif
+ 
+ PLATFORM_H = ghc_boot_platform.h
+ 
+-compiler/stage1/$(PLATFORM_H) : mk/config.mk mk/project.mk | $$(dir $$@)/.
++compiler/stage1/$(PLATFORM_H) : mk/config.mk mk/project.mk
+ 	$(call removeFiles,$@)
+ 	@echo "Creating $@..."
+ 	@echo "#ifndef __PLATFORM_H__"                           >> $@
+diff --git a/compiler/utils/BufWrite.hs b/compiler/utils/BufWrite.hs
+index 48a2c4c940..2709656570 100644
+--- a/compiler/utils/BufWrite.hs
++++ b/compiler/utils/BufWrite.hs
+@@ -36,6 +36,7 @@ import System.IO
+ 
+ -- -----------------------------------------------------------------------------
+ 
++#if !defined(__MHS__)
+ data BufHandle = BufHandle {-#UNPACK#-}!(Ptr Word8)
+                            {-#UNPACK#-}!FastMutInt
+                            Handle
+@@ -115,3 +116,30 @@ bFlush (BufHandle buf r hdl) = do
+   when (i > 0) $ hPutBuf hdl buf i
+   free buf
+   return ()
++#else
++type BufHandle = Handle
++
++newBufHandle :: Handle -> IO BufHandle
++newBufHandle = return
++
++buf_size :: Int
++buf_size = 8192
++
++bPutChar :: BufHandle -> Char -> IO ()
++bPutChar = hPutChar
++
++bPutStr :: BufHandle -> String -> IO ()
++bPutStr = hPutStr
++
++bPutFS :: BufHandle -> FastString -> IO ()
++bPutFS = hPutStr
++
++bPutFZS :: BufHandle -> FastZString -> IO ()
++bPutFZS = hPutStr
++
++bPutLitString :: BufHandle -> LitString -> IO ()
++bPutLitString = hPutStr
++
++bFlush :: BufHandle -> IO ()
++bFlush = hFlush
++#endif
+diff --git a/compiler/utils/Encoding.hs b/compiler/utils/Encoding.hs
+index 712de6ca82..76946b2751 100644
+--- a/compiler/utils/Encoding.hs
++++ b/compiler/utils/Encoding.hs
+@@ -13,11 +13,15 @@
+ 
+ module Encoding (
+         -- * UTF-8
++#if !defined(__MHS__)
+         utf8DecodeChar#,
++#endif
+         utf8PrevChar,
+         utf8CharStart,
++#if !defined(__MHS__)
+         utf8DecodeChar,
+         utf8DecodeString,
++#endif
+         utf8EncodeChar,
+         utf8EncodeString,
+         utf8EncodedLength,
+@@ -36,6 +40,7 @@ import Foreign
+ import Data.Char
+ import qualified Data.Char as Char
+ import Numeric
++#if !defined(__MHS__)
+ import GHC.Exts
+ 
+ -- -----------------------------------------------------------------------------
+@@ -100,6 +105,7 @@ utf8DecodeChar# a# =
+ utf8DecodeChar :: Ptr Word8 -> (Char, Int)
+ utf8DecodeChar (Ptr a#) =
+   case utf8DecodeChar# a# of (# c#, nBytes# #) -> ( C# c#, I# nBytes# )
++#endif
+ 
+ -- UTF-8 is cleverly designed so that we can always figure out where
+ -- the start of the current character is, given any position in a
+@@ -115,6 +121,7 @@ utf8CharStart p = go p
+                         then go (p `plusPtr` (-1))
+                         else return p
+ 
++#if !defined(__MHS__)
+ utf8DecodeString :: Ptr Word8 -> Int -> IO [Char]
+ utf8DecodeString ptr len
+   = unpack ptr
+@@ -145,6 +152,11 @@ unPtr (Ptr a) = a
+ 
+ plusPtr# :: Ptr a -> Int# -> Ptr a
+ plusPtr# ptr nBytes# = ptr `plusPtr` (I# nBytes#)
++#else
++-- Close enough
++countUTF8Chars :: Ptr Word8 -> Int -> IO Int
++countUTF8Chars _ len = return len
++#endif
+ 
+ utf8EncodeChar :: Char -> Ptr Word8 -> IO (Ptr Word8)
+ utf8EncodeChar c ptr =
+diff --git a/compiler/utils/FastFunctions.hs b/compiler/utils/FastFunctions.hs
+index c643e3c8fb..ea4e27c199 100644
+--- a/compiler/utils/FastFunctions.hs
++++ b/compiler/utils/FastFunctions.hs
+@@ -10,6 +10,7 @@ module FastFunctions (
+ 
+ #include "HsVersions.h"
+ 
++#if defined(__GLASGOW_HASKELL__)
+ import GHC.Exts
+ import GHC.IO   (IO(..))
+ 
+@@ -17,3 +18,9 @@ import GHC.IO   (IO(..))
+ {-# INLINE inlinePerformIO #-}
+ inlinePerformIO :: IO a -> a
+ inlinePerformIO (IO m) = case m realWorld# of (# _, r #)   -> r
++#else
++import System.IO.Unsafe (unsafePerformIO)
++
++inlinePerformIO :: IO a -> a
++inlinePerformIO = unsafePerformIO
++#endif
+diff --git a/compiler/utils/FastMutInt.hs b/compiler/utils/FastMutInt.hs
+index 4cde1216ed..84fe156a92 100644
+--- a/compiler/utils/FastMutInt.hs
++++ b/compiler/utils/FastMutInt.hs
+@@ -11,11 +11,14 @@ module FastMutInt(
+         FastMutInt, newFastMutInt,
+         readFastMutInt, writeFastMutInt,
+ 
++#if !defined(__MHS__)
+         FastMutPtr, newFastMutPtr,
+         readFastMutPtr, writeFastMutPtr
++#endif
+   ) where
+ 
+ 
++#if !defined(__MHS__)
+ #include "../includes/MachDeps.h"
+ #ifndef SIZEOF_HSINT
+ #define SIZEOF_HSINT  INT_SIZE_IN_BYTES
+@@ -61,3 +64,12 @@ readFastMutPtr (FastMutPtr arr) = IO $ \s ->
+ writeFastMutPtr (FastMutPtr arr) (Ptr i) = IO $ \s ->
+   case writeAddrArray# arr 0# i s of { s ->
+   (# s, () #) }
++#else
++import Data.IORef
++
++type FastMutInt = IORef Int
++
++newFastMutInt = newIORef 0
++readFastMutInt = readIORef
++writeFastMutInt = writeIORef
++#endif
+diff --git a/compiler/utils/FastString.hs b/compiler/utils/FastString.hs
+index 6e692f25a1..f06d4375bd 100644
+--- a/compiler/utils/FastString.hs
++++ b/compiler/utils/FastString.hs
+@@ -28,67 +28,71 @@
+ module FastString
+        (
+         -- * ByteString
+-        fastStringToByteString,
+-        mkFastStringByteString,
+-        fastZStringToByteString,
+-        unsafeMkByteString,
+-        hashByteString,
++        -- fastStringToByteString,
++        -- mkFastStringByteString,
++        -- fastZStringToByteString,
++        -- unsafeMkByteString,
++        -- hashByteString,
+ 
+         -- * FastZString
+         FastZString,
+-        hPutFZS,
+-        zString,
+-        lengthFZS,
++        -- hPutFZS,
++        -- zString,
++        -- lengthFZS,
+ 
+         -- * FastStrings
+         FastString(..),     -- not abstract, for now.
+ 
+         -- ** Construction
+-        fsLit,
+-        mkFastString,
+-        mkFastStringBytes,
+-        mkFastStringByteList,
+-        mkFastStringForeignPtr,
++        -- fsLit,
++        -- mkFastString,
++        -- mkFastStringBytes,
++        -- mkFastStringByteList,
++        -- mkFastStringForeignPtr,
++#if !defined(__MHS__)
+         mkFastString#,
++#endif
+ 
+         -- ** Deconstruction
+-        unpackFS,           -- :: FastString -> String
+-        bytesFS,            -- :: FastString -> [Word8]
++        -- unpackFS,           -- :: FastString -> String
++        -- bytesFS,            -- :: FastString -> [Word8]
+ 
+         -- ** Encoding
+-        zEncodeFS,
++        -- zEncodeFS,
+ 
+         -- ** Operations
+-        uniqueOfFS,
+-        lengthFS,
+-        nullFS,
+-        appendFS,
+-        headFS,
+-        tailFS,
+-        concatFS,
+-        consFS,
+-        nilFS,
++        -- uniqueOfFS,
++        -- lengthFS,
++        -- nullFS,
++        -- appendFS,
++        -- headFS,
++        -- tailFS,
++        -- concatFS,
++        -- consFS,
++        -- nilFS,
+ 
+         -- ** Outputing
+-        hPutFS,
++        -- hPutFS,
+ 
+         -- ** Internal
+-        getFastStringTable,
+-        hasZEncoding,
++        -- getFastStringTable,
++        -- hasZEncoding,
+ 
+         -- * LitStrings
+         LitString,
+ 
+         -- ** Construction
+-        sLit,
++        -- sLit,
++#if !defined(__MHS__)
+         mkLitString#,
+-        mkLitString,
++#endif
++        -- mkLitString,
+ 
+         -- ** Deconstruction
+-        unpackLitString,
++        -- unpackLitString,
+ 
+         -- ** Operations
+-        lengthLS
++        -- lengthLS
+        ) where
+ 
+ #include "HsVersions.h"
+@@ -98,6 +102,7 @@ import FastFunctions
+ import Panic
+ import Util
+ 
++#if !defined(__MHS__)
+ import Control.DeepSeq
+ import Control.Monad
+ import Data.ByteString (ByteString)
+@@ -106,7 +111,9 @@ import qualified Data.ByteString.Char8    as BSC
+ import qualified Data.ByteString.Internal as BS
+ import qualified Data.ByteString.Unsafe   as BS
+ import Foreign.C
++#if defined(__GLASGOW_HASKELL__)
+ import GHC.Exts
++#endif
+ import System.IO
+ import System.IO.Unsafe ( unsafePerformIO )
+ import Data.Data
+@@ -116,6 +123,7 @@ import Data.Char
+ import Data.List        ( elemIndex )
+ 
+ import GHC.IO           ( IO(..), unsafeDupablePerformIO )
++import System.IO.Unsafe ( unsafeDupablePerformIO )
+ 
+ #if __GLASGOW_HASKELL__ >= 709
+ import Foreign
+@@ -610,3 +618,26 @@ fsLit x = mkFastString x
+     forall x . sLit  (unpackCString# x) = mkLitString#  x #-}
+ {-# RULES "fslit"
+     forall x . fsLit (unpackCString# x) = mkFastString# x #-}
++#else
++type FastString = String
++type FastZString = String
++type LitString = String
++--data FastStringTable = FastStringTable !(IORef Int) [IORef (IORef [FastString])]
++--
++--string_table :: FastStringTable
++--{-# NOINLINE string_table #-}
++--string_table = unsafePerformIO $ do
++--  uid <- newIORef 603979776 -- ord '$' * 0x01000000
++--  tab <- mapM id $ replicate hASH_TBL_SIZE $ newIORef [] >>= newIORef
++--  pure $ FastStringTable uid tab
++--
++--lookupTbl :: FastStringTable -> Int -> IO (IORef [FastString])
++--lookupTbl (FastStringTable _ tab) idx = readIORef $ tab !! idx
++--
++--updateTbl :: FastStringTable -> Int -> IORef [FastString] -> IO ()
++--updateTbl (FastStringTable _ tab) idx ls
++--  = atomicModifyIORef' (tab !! idx) $ \_ -> (ls, ())
++--
++--hashStr :: Ptr Word8 -> Int -> Int
++--hashStr _ _ = 0
++#endif
+diff --git a/compiler/utils/Outputable.hs b/compiler/utils/Outputable.hs
+index 3a2d8be615..302a09f3b8 100644
+--- a/compiler/utils/Outputable.hs
++++ b/compiler/utils/Outputable.hs
+@@ -90,12 +90,15 @@ import {-# SOURCE #-}   OccName( OccName )
+ import {-# SOURCE #-}   StaticFlags( opt_PprStyle_Debug, opt_NoDebugOutput )
+ 
+ import FastString
++import Pretty (mode, lineLength)
+ import qualified Pretty
+ import Util
+ import Platform
+ import Pretty           ( Doc, Mode(..) )
+ import Panic
++#if !defined(__MHS__)
+ import GHC.Serialized
++#endif
+ 
+ import Data.ByteString (ByteString)
+ import qualified Data.ByteString as BS
+@@ -110,11 +113,17 @@ import Data.Word
+ import System.IO        ( Handle )
+ import System.FilePath
+ import Text.Printf
++#if !defined(__MHS__)
+ import Numeric (showFFloat)
+ import Data.Graph (SCC(..))
++#else
++import Data.Graph
++#endif
+ 
++#if !defined(__MHS__)
+ import GHC.Fingerprint
+ import GHC.Show         ( showMultiLineString )
++#endif
+ #if __GLASGOW_HASKELL__ > 710
+ import GHC.Stack
+ #endif
+@@ -451,8 +460,8 @@ showSDocDebug dflags d = renderWithStyle dflags d PprDebug
+ 
+ renderWithStyle :: DynFlags -> SDoc -> PprStyle -> String
+ renderWithStyle dflags sdoc sty
+-  = let s = Pretty.style{ Pretty.mode = PageMode,
+-                          Pretty.lineLength = pprCols dflags }
++  = let s = Pretty.style{ mode = PageMode,
++                          lineLength = pprCols dflags }
+     in Pretty.renderStyle s $ runSDoc sdoc (initSDocContext dflags sty)
+ 
+ -- This shows an SDoc, but on one line only. It's cheaper than a full
+@@ -460,14 +469,14 @@ renderWithStyle dflags sdoc sty
+ -- and "foo{uniq strictness}" so we don't want fancy layout anyway.
+ showSDocOneLine :: DynFlags -> SDoc -> String
+ showSDocOneLine dflags d
+- = let s = Pretty.style{ Pretty.mode = OneLineMode,
+-                         Pretty.lineLength = pprCols dflags } in
++ = let s = Pretty.style{ mode = OneLineMode,
++                         lineLength = pprCols dflags } in
+    Pretty.renderStyle s $ runSDoc d (initSDocContext dflags defaultUserStyle)
+ 
+ showSDocDumpOneLine :: DynFlags -> SDoc -> String
+ showSDocDumpOneLine dflags d
+- = let s = Pretty.style{ Pretty.mode = OneLineMode,
+-                         Pretty.lineLength = irrelevantNCols } in
++ = let s = Pretty.style{ mode = OneLineMode,
++                         lineLength = irrelevantNCols } in
+    Pretty.renderStyle s $ runSDoc d (initSDocContext dflags defaultDumpStyle)
+ 
+ irrelevantNCols :: Int
+@@ -511,7 +520,11 @@ rational n  = docToSDoc $ Pretty.rational n
+ -- | @doublePrec p n@ shows a floating point number @n@ with @p@
+ -- digits of precision after the decimal point.
+ doublePrec :: Int -> Double -> SDoc
++#if !defined(__MHS__)
+ doublePrec p n = text (showFFloat (Just p) n "")
++#else
++doublePrec _ n = text (show n)
++#endif
+ 
+ parens, braces, brackets, quotes, quote,
+         paBrackets, doubleQuotes, angleBrackets :: SDoc -> SDoc
+@@ -812,15 +825,19 @@ instance (Outputable key, Outputable elt) => Outputable (M.Map key elt) where
+ instance (Outputable elt) => Outputable (IM.IntMap elt) where
+     ppr m = ppr (IM.toList m)
+ 
++#if !defined(__MHS__)
+ instance Outputable Fingerprint where
+     ppr (Fingerprint w1 w2) = text (printf "%016x%016x" w1 w2)
++#endif
+ 
+ instance Outputable a => Outputable (SCC a) where
+    ppr (AcyclicSCC v) = text "NONREC" $$ (nest 3 (ppr v))
+    ppr (CyclicSCC vs) = text "REC" $$ (nest 3 (vcat (map ppr vs)))
+ 
++#if !defined(__MHS__)
+ instance Outputable Serialized where
+     ppr (Serialized the_type bytes) = int (length bytes) <+> text "of type" <+> text (show the_type)
++#endif
+ 
+ {-
+ ************************************************************************
+diff --git a/compiler/utils/Panic.hs b/compiler/utils/Panic.hs
+index b19c770718..793793bb70 100644
+--- a/compiler/utils/Panic.hs
++++ b/compiler/utils/Panic.hs
+@@ -21,7 +21,11 @@ module Panic (
+      panicDoc, sorryDoc, pgmErrorDoc,
+ 
+      Exception.Exception(..), showException, safeShowException,
++#if !defined(__MHS__)
+      try, tryMost, throwTo,
++#else
++     try, tryMost,
++#endif
+ 
+      installSignalHandlers,
+ ) where
+@@ -32,13 +36,15 @@ import {-# SOURCE #-} Outputable (SDoc, showSDocUnsafe)
+ import Config
+ import Exception
+ 
++#if !defined(__MHS__)
+ import Control.Concurrent
++#endif
+ import Data.Dynamic
+ import Debug.Trace        ( trace )
+ import System.IO.Unsafe
+ import System.Environment
+ 
+-#ifndef mingw32_HOST_OS
++#if !defined(mingw32_HOST_OS) && !defined(__MHS__)
+ import System.Posix.Signals
+ #endif
+ 
+@@ -47,7 +53,9 @@ import GHC.ConsoleHandler
+ #endif
+ 
+ import GHC.Stack
++#if !defined(__MHS__)
+ import System.Mem.Weak  ( deRefWeak )
++#endif
+ 
+ -- | GHC's own exception type
+ --   error messages all take the form:
+@@ -181,10 +189,14 @@ handleGhcException = ghandle
+ -- | Panics and asserts.
+ panic, sorry, pgmError :: String -> a
+ panic    x = unsafeDupablePerformIO $ do
++#if !defined(__MHS__)
+    stack <- ccsToStrings =<< getCurrentCCS x
+    if null stack
+       then throwGhcException (Panic x)
+       else throwGhcException (Panic (x ++ '\n' : renderStack stack))
++#else
++   throwGhcException (Panic x)
++#endif
+ 
+ sorry    x = throwGhcException (Sorry x)
+ pgmError x = throwGhcException (ProgramError x)
+@@ -198,7 +210,11 @@ pgmErrorDoc x doc = throwGhcException (PprProgramError x doc)
+ -- | Throw an failed assertion exception for a given filename and line number.
+ assertPanic :: String -> Int -> a
+ assertPanic file line =
++#if !defined(__MHS__)
+   Exception.throw (Exception.AssertionFailed
++#else
++  (error
++#endif
+            ("ASSERT failed! file " ++ file ++ ", line " ++ show line))
+ 
+ 
+@@ -231,6 +247,7 @@ tryMost action = do r <- try action
+ --   installSignalHandlers.
+ installSignalHandlers :: IO ()
+ installSignalHandlers = do
++#if !defined(__MHS__)
+   main_thread <- myThreadId
+   wtid <- mkWeakThreadId main_thread
+ 
+@@ -263,3 +280,6 @@ installSignalHandlers = do
+   _ <- installHandler (Catch sig_handler)
+   return ()
+ #endif
++#else
++  return ()
++#endif
+diff --git a/compiler/utils/Pretty.hs b/compiler/utils/Pretty.hs
+index 98490322c5..8eb983ff03 100644
+--- a/compiler/utils/Pretty.hs
++++ b/compiler/utils/Pretty.hs
+@@ -113,8 +113,9 @@ module Pretty (
+ 
+ import BufWrite
+ import FastString
+-import Panic
+ import System.IO
++#if !defined(__MHS__)
++import Panic
+ import Prelude hiding (error)
+ 
+ --for a RULES
+@@ -1054,3 +1055,42 @@ layLeft _ _                  = panic "layLeft: Unhandled case"
+ -- Define error=panic, for easier comparison with libraries/pretty.
+ error :: String -> a
+ error = panic
++#else
++import Prelude hiding (error, (<>))
++import Text.PrettyPrint.HughesPJ
++
++ftext :: FastString -> Doc
++ftext = text
++
++ztext :: FastZString -> Doc
++ztext = text
++
++quote :: Doc -> Doc
++quote p = char '\'' <> p
++
++-- | Apply 'hang' to the arguments if the first 'Doc' is not empty.
++hangNotEmpty :: Doc -> Int -> Doc -> Doc
++hangNotEmpty d1 n d2 = if isEmpty d1
++                       then d2
++                       else hang d1 n d2
++
++printDoc :: Mode -> Int -> Handle -> Doc -> IO ()
++-- printDoc adds a newline to the end
++printDoc mode cols hdl doc = printDoc_ mode cols hdl (doc $$ text "")
++
++printDoc_ :: Mode -> Int -> Handle -> Doc -> IO ()
++-- printDoc_ does not add a newline at the end, so that
++-- successive calls can output stuff on the same line
++-- Rather like putStr vs putStrLn
++printDoc_ mode pprCols hdl doc
++  = do { fullRender mode pprCols 1.5 put done doc ;
++         hFlush hdl }
++  where
++    put (Chr c)  next = hPutChar hdl c >> next
++    put (Str s)  next = hPutStr  hdl s >> next
++
++    done = return () -- hPutChar hdl '\n'
++
++bufLeftRender :: BufHandle -> Doc -> IO ()
++bufLeftRender = printDoc LeftMode 0
++#endif
+diff --git a/compiler/utils/Util.hs b/compiler/utils/Util.hs
+index dc4fa52662..ad8ee46cdd 100644
+--- a/compiler/utils/Util.hs
++++ b/compiler/utils/Util.hs
+@@ -99,8 +99,10 @@ module Util (
+         Direction(..), reslash,
+         makeRelativeTo,
+ 
++#if !defined(__MHS__)
+         -- * Utils for defining Data instances
+         abstractConstr, abstractDataType, mkNoRepType,
++#endif
+ 
+         -- * Utils for printing C code
+         charToC,
+@@ -119,17 +121,27 @@ import Data.IORef       ( IORef, newIORef, atomicModifyIORef' )
+ import System.IO.Unsafe ( unsafePerformIO )
+ import Data.List        hiding (group)
+ 
++#if defined(__GLASGOW_HASKELL__)
+ import GHC.Exts
++#endif
+ 
+ #if __GLASGOW_HASKELL__ < 709
+ import Control.Applicative (Applicative)
+ #endif
+ import Control.Applicative ( liftA2 )
+ import Control.Monad    ( liftM )
++#if !defined(__MHS__)
+ import GHC.IO.Encoding (mkTextEncoding, textEncodingName)
+ import System.IO (Handle, hGetEncoding, hSetEncoding)
++#else
++import System.IO (Handle)
++#endif
+ import System.IO.Error as IO ( isDoesNotExistError )
++#if !defined(__MHS__)
+ import System.Directory ( doesDirectoryExist, getModificationTime )
++#else
++import System.Directory ( doesDirectoryExist )
++#endif
+ import System.FilePath
+ 
+ import Data.Char        ( isUpper, isAlphaNum, isSpace, chr, ord, isDigit )
+@@ -555,6 +567,11 @@ chunkList n xs = as : chunkList n bs where (as,bs) = splitAt n xs
+ ************************************************************************
+ -}
+ 
++#if defined(__MHS__)
++sortWith :: Ord b => (a -> b) -> [a] -> [a]
++sortWith = sortOn
++#endif
++
+ minWith :: Ord b => (a -> b) -> [a] -> a
+ minWith get_key xs = ASSERT( not (null xs) )
+                      head (sortWith get_key xs)
+@@ -788,7 +805,8 @@ restrictedDamerauLevenshteinDistance' _bv_dummy m n str1 str2
+                              (matchVectors str1) top_bit_mask vector_mask)
+                         (0, 0, m_ones, 0, m) str2
+   where
+-    m_ones@vector_mask = (2 ^ m) - 1
++    m_ones = (2 ^ m) - 1
++    vector_mask = m_ones
+     top_bit_mask = (1 `shiftL` (m - 1)) `asTypeOf` _bv_dummy
+     extractAnswer (_, _, _, _, distance) = distance
+ 
+@@ -994,7 +1012,7 @@ readRational__ r = do
+         (ds',t) <- lexDotDigits s
+         return (read (ds++ds'), length ds', t)
+ 
+-     readExp (e:s) | e `elem` "eE" = readExp' s
++     readExp (e:s) | e `elem` ("eE"::String) = readExp' s
+      readExp s                     = return (0,s)
+ 
+      readExp' ('+':s) = readDec s
+@@ -1050,6 +1068,7 @@ maybeReadFuzzy str = case reads str of
+ doesDirNameExist :: FilePath -> IO Bool
+ doesDirNameExist fpath = doesDirectoryExist (takeDirectory fpath)
+ 
++#if !defined(__MHS__)
+ -----------------------------------------------------------------------------
+ -- Backwards compatibility definition of getModificationTime
+ 
+@@ -1078,6 +1097,16 @@ hSetTranslit h = do
+             enc' <- mkTextEncoding $ name ++ "//TRANSLIT"
+             hSetEncoding h enc'
+         _ -> return ()
++#else
++getModificationUTCTime :: FilePath -> IO UTCTime
++getModificationUTCTime _ = return (error "getModificationUTCTime: unsupported")
++
++modificationTimeIfExists :: FilePath -> IO (Maybe UTCTime)
++modificationTimeIfExists f = return Nothing
++
++hSetTranslit :: Handle -> IO ()
++hSetTranslit _ = return ()
++#endif
+ 
+ -- split a string at the last character where 'pred' is True,
+ -- returning a pair of strings. The first component holds the string
+@@ -1127,6 +1156,7 @@ this `makeRelativeTo` that = directory </> thisFilename
+            | x == y = f xs ys
+           f xs ys = replicate (length ys) ".." ++ xs
+ 
++#if !defined(__MHS__)
+ {-
+ ************************************************************************
+ *                                                                      *
+@@ -1142,6 +1172,7 @@ abstractConstr n = mkConstr (abstractDataType n) ("{abstract:"++n++"}") [] Prefi
+ 
+ abstractDataType :: String -> DataType
+ abstractDataType n = mkDataType n [abstractConstr n]
++#endif
+ 
+ {-
+ ************************************************************************
+Submodule libraries/Cabal contains modified content
+diff --git a/libraries/Cabal/Cabal/Distribution/Compat/ReadP.hs b/libraries/Cabal/Cabal/Distribution/Compat/ReadP.hs
+index b4a3a09c3..5d687e216 100644
+--- a/libraries/Cabal/Cabal/Distribution/Compat/ReadP.hs
++++ b/libraries/Cabal/Cabal/Distribution/Compat/ReadP.hs
+@@ -1,3 +1,4 @@
++{-# LANGUAGE CPP #-}
+ -----------------------------------------------------------------------------
+ -- |
+ -- Module      :  Distribution.Compat.ReadP
+@@ -106,7 +107,9 @@ instance Monad (P s) where
+   (Result x p) >>= k = k x `mplus` (p >>= k)
+   (Final r)    >>= k = final [ys' | (x,s) <- r, ys' <- run (k x) s]
+ 
++#if !defined(__MHS__)
+   fail = Fail.fail
++#endif
+ 
+ instance Fail.MonadFail (P s) where
+   fail _ = Fail
+@@ -161,7 +164,9 @@ instance Applicative (Parser r s) where
+ 
+ instance Monad (Parser r s) where
+   return = AP.pure
++#if !defined(__MHS__)
+   fail = Fail.fail
++#endif
+   R m >>= f = R (\k -> m (\a -> let R m' = f a in m' k))
+ 
+ instance Fail.MonadFail (Parser r s) where
+diff --git a/libraries/Cabal/Cabal/Distribution/Text.hs b/libraries/Cabal/Cabal/Distribution/Text.hs
+index f45b3a562..18180af42 100644
+--- a/libraries/Cabal/Cabal/Distribution/Text.hs
++++ b/libraries/Cabal/Cabal/Distribution/Text.hs
+@@ -1,3 +1,4 @@
++{-# LANGUAGE CPP #-}
+ -----------------------------------------------------------------------------
+ -- |
+ -- Module      :  Distribution.Text
+@@ -19,6 +20,7 @@ module Distribution.Text (
+   ) where
+ 
+ import qualified Distribution.Compat.ReadP as Parse
++import Text.PrettyPrint (mode, lineLength, ribbonsPerLine)
+ import qualified Text.PrettyPrint          as Disp
+ 
+ import Data.Version (Version(Version))
+@@ -30,9 +32,9 @@ class Text a where
+ 
+ -- | The default rendering style used in Cabal for console output.
+ defaultStyle :: Disp.Style
+-defaultStyle = Disp.Style { Disp.mode           = Disp.PageMode
+-                          , Disp.lineLength     = 79
+-                          , Disp.ribbonsPerLine = 1.0
++defaultStyle = Disp.Style { mode           = Disp.PageMode
++                          , lineLength     = 79
++                          , ribbonsPerLine = 1.0
+                           }
+ 
+ display :: Text a => a -> String
+@@ -63,11 +65,19 @@ parseNat :: Parse.ReadP r Int
+ parseNat = read `fmap` Parse.munch1 Char.isDigit
+ 
+ instance Text Version where
++#if !defined(__MHS__)
+   disp (Version branch _tags)     -- Death to version tags!!
++#else
++  disp (Version branch)
++#endif
+     = Disp.hcat (Disp.punctuate (Disp.char '.') (map Disp.int branch))
+ 
+   parse = do
+       branch <- Parse.sepBy1 parseNat (Parse.char '.')
+                 -- allow but ignore tags:
+       _tags  <- Parse.many (Parse.char '-' >> Parse.munch1 Char.isAlphaNum)
++#if !defined(__MHS__)
+       return (Version branch [])
++#else
++      return (Version branch)
++#endif
+diff --git a/libraries/ghc-boot-th/GHC/Lexeme.hs b/libraries/ghc-boot-th/GHC/Lexeme.hs
+index 677c9a65e6..ee252eeb79 100644
+--- a/libraries/ghc-boot-th/GHC/Lexeme.hs
++++ b/libraries/ghc-boot-th/GHC/Lexeme.hs
+@@ -1,3 +1,5 @@
++{-# LANGUAGE CPP #-}
++
+ -----------------------------------------------------------------------------
+ -- |
+ -- Module      :  GHC.Lexeme
+@@ -15,6 +17,9 @@ module GHC.Lexeme (
+   ) where
+ 
+ import Data.Char
++#if defined(__MHS__)
++import Data.Char.Unicode (GeneralCategory(..), generalCategory)
++#endif
+ 
+ startsVarSym, startsVarId, startsConSym, startsConId :: Char -> Bool
+ startsVarSym c = startsVarSymASCII c || (ord c > 0x7f && isSymbol c)  -- Infix Ids
+@@ -26,7 +31,7 @@ startsVarId c  = c == '_' || case generalCategory c of  -- Ordinary Ids
+ startsConId c  = isUpper c || c == '('  -- Ordinary type constructors and data constructors
+ 
+ startsVarSymASCII :: Char -> Bool
+-startsVarSymASCII c = c `elem` "!#$%&*+./<=>?@\\^|~-"
++startsVarSymASCII c = c `elem` ("!#$%&*+./<=>?@\\^|~-" :: String)
+ 
+ isVarSymChar :: Char -> Bool
+ isVarSymChar c = c == ':' || startsVarSym c
+diff --git a/libraries/ghc-boot/GHC/PackageDb.hs b/libraries/ghc-boot/GHC/PackageDb.hs
+index a6d052bd99..738ef80604 100644
+--- a/libraries/ghc-boot/GHC/PackageDb.hs
++++ b/libraries/ghc-boot/GHC/PackageDb.hs
+@@ -1,4 +1,5 @@
+ {-# LANGUAGE ConstraintKinds #-}
++{-# LANGUAGE CPP #-}
+ {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+ -----------------------------------------------------------------------------
+ -- |
+@@ -58,7 +59,9 @@ import Control.Monad (when)
+ import System.FilePath
+ import System.IO
+ import System.IO.Error
++#if defined(__GLASGOW_HASKELL__)
+ import GHC.IO.Exception (IOErrorType(InappropriateType))
++#endif
+ import System.Directory
+ 
+ 
+@@ -142,7 +145,11 @@ emptyInstalledPackageInfo =
+        unitId             = fromStringRep BS.empty,
+        sourcePackageId    = fromStringRep BS.empty,
+        packageName        = fromStringRep BS.empty,
++#if !defined(__MHS__)
+        packageVersion     = Version [] [],
++#else
++       packageVersion     = Version [],
++#endif
+        abiHash            = "",
+        depends            = [],
+        importDirs         = [],
+diff --git a/libraries/ghc-boot/ghc-boot.cabal.in b/libraries/ghc-boot/ghc-boot.cabal.in
+index 2a1ceb3798..85dedd64a6 100644
+--- a/libraries/ghc-boot/ghc-boot.cabal.in
++++ b/libraries/ghc-boot/ghc-boot.cabal.in
+@@ -39,6 +39,8 @@ Library
+             GHC.LanguageExtensions
+             GHC.LanguageExtensions.Type
+             GHC.PackageDb
++    if !impl(mhs)
++        exposed-modules:
+             GHC.Serialized
+ 
+     build-depends: base       >= 4.7 && < 4.10,
+diff --git a/utils/ghc-cabal/Main.hs b/utils/ghc-cabal/Main.hs
+index 0ec2a2a2ec..fb7a77275e 100644
+--- a/utils/ghc-cabal/Main.hs
++++ b/utils/ghc-cabal/Main.hs
+@@ -20,6 +20,8 @@ import Distribution.Simple.Build (writeAutogenFiles)
+ import Distribution.Simple.Register
+ import Distribution.Text
+ import Distribution.Verbosity
++import Distribution.InstalledPackageInfo
++  (hsLibraries, installedUnitId, compatPackageKey, haddockHTMLs, ldOptions, libraryDirs)
+ import qualified Distribution.InstalledPackageInfo as Installed
+ import qualified Distribution.Simple.PackageIndex as PackageIndex
+ 
+@@ -277,7 +279,7 @@ mangleIPI "compiler" "stage2" lbi ipi
+     -- library that's too big and split that.
+     let [old_hslib] = Installed.hsLibraries ipi
+     in ipi {
+-        Installed.hsLibraries = [old_hslib, old_hslib ++ "-0"]
++        hsLibraries = [old_hslib, old_hslib ++ "-0"]
+     }
+     where isWindows = case hostPlatform lbi of
+                       Platform _ Windows -> True
+@@ -321,9 +323,9 @@ generate directory distdir dll0Modules config_args
+              let installedPkgInfo = inplaceInstalledPackageInfo cwd distdir
+                                         pd (AbiHash "") lib lbi clbi
+                  final_ipi = mangleIPI directory distdir lbi $ installedPkgInfo {
+-                                 Installed.installedUnitId = ipid,
+-                                 Installed.compatPackageKey = display (packageId pd),
+-                                 Installed.haddockHTMLs = []
++                                 installedUnitId = ipid,
++                                 compatPackageKey = display (packageId pd),
++                                 haddockHTMLs = []
+                              }
+                  content = Installed.showInstalledPackageInfo final_ipi ++ "\n"
+              writeFileAtomic (distdir </> "inplace-pkg-config") (BS.pack $ toUTF8 content)
+@@ -360,8 +362,8 @@ generate directory distdir dll0Modules config_args
+             case PackageIndex.lookupPackageName index (PackageName "rts") of
+               [(_,[rts])] ->
+                  PackageIndex.insert rts{
+-                     Installed.ldOptions = [],
+-                     Installed.libraryDirs = filter (not . ("gcc-lib" `isSuffixOf`)) (Installed.libraryDirs rts)} index
++                     ldOptions = [],
++                     libraryDirs = filter (not . ("gcc-lib" `isSuffixOf`)) (Installed.libraryDirs rts)} index
+                         -- GHC <= 6.12 had $topdir/gcc-lib in their
+                         -- library-dirs for the rts package, which causes
+                         -- problems when we try to use the in-tree mingw,

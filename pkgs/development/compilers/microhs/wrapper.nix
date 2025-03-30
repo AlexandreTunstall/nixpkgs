@@ -34,7 +34,9 @@ let
     exec ${microhs}/bin/mhs "''${args[@]}"
   '';
 
-in runCommand "${microhs.name}-wrapped" {} ''
+in runCommand "${microhs.name}-wrapped" {
+  inherit (microhs) passthru;
+} ''
   mkdir -p $out/bin
   cp -rs ${microhs}/bin/* $out/bin/
   rm $out/bin/mhs 2>/dev/null || true

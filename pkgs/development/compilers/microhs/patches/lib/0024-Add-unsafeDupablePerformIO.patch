@@ -1,0 +1,29 @@
+From c46d8fc2e52e3c218c234d7e4be9a9a0a5e80c4a Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Sun, 30 Mar 2025 09:23:11 +0100
+Subject: [PATCH] Add unsafeDupablePerformIO
+
+---
+ lib/System/IO/Unsafe.hs | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/lib/System/IO/Unsafe.hs b/lib/System/IO/Unsafe.hs
+index c28e6eeb..f86a157f 100644
+--- a/lib/System/IO/Unsafe.hs
++++ b/lib/System/IO/Unsafe.hs
+@@ -1,4 +1,4 @@
+-module System.IO.Unsafe(unsafePerformIO, unsafeInterleaveIO) where
++module System.IO.Unsafe(unsafePerformIO, unsafeInterleaveIO, unsafeDupablePerformIO) where
+ import qualified Prelude()
+ import Primitives
+ 
+@@ -7,3 +7,6 @@ unsafePerformIO = primPerformIO
+ 
+ unsafeInterleaveIO :: forall a . IO a -> IO a
+ unsafeInterleaveIO ioa = primReturn (primPerformIO ioa)
++
++unsafeDupablePerformIO :: IO a -> a
++unsafeDupablePerformIO = unsafePerformIO
+-- 
+2.47.2
+

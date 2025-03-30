@@ -1,0 +1,82 @@
+From f9d9b69badd9731027ab36913a420e4fc1e0938d Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Sun, 30 Mar 2025 11:19:51 +0100
+Subject: [PATCH] Add fromForeignPtr
+
+---
+ lib/Data/ByteString/Internal.hs |  5 +++++
+ lib/Foreign/ForeignPtr.hs       |  7 ++++++-
+ lib/Foreign/Marshal/Array.hs    | 11 ++++++++++-
+ 3 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/lib/Data/ByteString/Internal.hs b/lib/Data/ByteString/Internal.hs
+index c9c22e1d..500ed1e8 100644
+--- a/lib/Data/ByteString/Internal.hs
++++ b/lib/Data/ByteString/Internal.hs
+@@ -16,6 +16,7 @@ import Data.Ord
+ import Data.String
+ import Data.Word (Word8)
+ import Foreign.C.Types (CChar)
++import Foreign.ForeignPtr
+ import System.IO.Unsafe
+ import Text.Show
+ 
+@@ -124,5 +125,9 @@ unpack = primBSunpack
+ null :: ByteString -> Bool
+ null bs = length bs == 0
+ 
++fromForeignPtr :: ForeignPtr Word8 -> Int -> Int -> ByteString
++fromForeignPtr ptr offset len
++  = primFPtr2BS (castForeignPtr $ plusForeignPtr ptr offset :: ForeignPtr CChar) len
++
+ accursedUnutterablePerformIO :: IO a -> a
+ accursedUnutterablePerformIO = unsafePerformIO
+diff --git a/lib/Foreign/ForeignPtr.hs b/lib/Foreign/ForeignPtr.hs
+index 506c4f43..8351560f 100644
+--- a/lib/Foreign/ForeignPtr.hs
++++ b/lib/Foreign/ForeignPtr.hs
+@@ -14,12 +14,17 @@ module Foreign.ForeignPtr (
+   mallocForeignPtrArray,
+   mallocForeignPtrArray0,
+   ) where
+-import qualified Prelude(); import MiniPrelude
++import qualified Prelude()
+ import Primitives
++import Control.Monad
++import Data.Eq
++import Data.Function
++import Data.Ord
+ import Foreign.Ptr
+ import Foreign.Storable
+ import Foreign.Marshal.Alloc
+ import Foreign.Marshal.Array
++import Text.Show
+ 
+ instance Eq (ForeignPtr a) where
+     p == q  =  unsafeForeignPtrToPtr p == unsafeForeignPtrToPtr q
+diff --git a/lib/Foreign/Marshal/Array.hs b/lib/Foreign/Marshal/Array.hs
+index 5bb497f2..57cda8ec 100644
+--- a/lib/Foreign/Marshal/Array.hs
++++ b/lib/Foreign/Marshal/Array.hs
+@@ -1,8 +1,17 @@
+ module Foreign.Marshal.Array(module Foreign.Marshal.Array) where
+-import qualified Prelude(); import MiniPrelude
++import qualified Prelude()
++import Primitives
++import Control.Error
++import Control.Monad
++import Data.Bool
++import Data.Eq
++import Data.List
++import Data.Num
++import Data.Ord
+ import Foreign.Ptr
+ import Foreign.Storable
+ import Foreign.Marshal.Alloc
++import System.IO.Internal
+ 
+ mallocArray :: forall a . Storable a => Int -> IO (Ptr a)
+ mallocArray size = mallocBytes (size * sizeOf (undefined :: a))
+-- 
+2.47.2
+

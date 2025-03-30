@@ -143,11 +143,6 @@ let
     name = "${pname}-${version}-r${revision}.cabal";
   };
 
-  defaultSetupHs = builtins.toFile "Setup.hs" ''
-    import Distribution.Simple
-    main = defaultMain
-  '';
-
   nativeCompilerWithPkgs = wrapMhs {
     microhs = nativeCompiler;
     # FIXME: Filter out non-Haskell packages
@@ -165,7 +160,7 @@ in stdenv.mkDerivation {
 
   inherit src patches;
 
-  depsBuildBuild = [ nativeCompilerWithPkgs ];
+  depsBuildBuild = [ nativeCompilerWithPkgs ] ++ buildTools;
   buildInputs = lib.optionals (!isLibrary) propagatedBuildInputs;
   propagatedBuildInputs = lib.optionals isLibrary propagatedBuildInputs;
 
@@ -237,4 +232,13 @@ in stdenv.mkDerivation {
 
     runHook postInstall
   '';
+
+  inherit preCompileBuildDriver postCompileBuildDriver
+    preUnpack postUnpack
+    preConfigure postConfigure
+    preBuild postBuild
+    preHaddock postHaddock
+    preInstall postInstall
+    preCheck postCheck
+    preFixup postFixup;
 }

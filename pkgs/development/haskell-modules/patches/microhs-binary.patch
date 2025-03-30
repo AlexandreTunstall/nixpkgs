@@ -77,15 +77,19 @@
  --
  -- The IArray UArray e constraint is non portable. Requires flexible instances
  --
-@@ -755,6 +763,7 @@
+@@ -755,6 +763,11 @@
  instance Binary Version where
      put (Version br tags) = put br <> put tags
      get = Version <$> get <*> get
++#else
++instance Binary Version where
++    put (Version br) = put br
++    get = Version <$> get
 +#endif
  
  ------------------------------------------------------------------------
  -- Data.Monoid datatypes
-@@ -825,7 +834,7 @@
+@@ -825,7 +838,7 @@
    get = fmap Semigroup.Last get
    put = put . Semigroup.getLast
  
@@ -94,7 +98,7 @@
  -- | @since 0.8.4.0
  instance Binary a => Binary (Semigroup.Option a) where
    get = fmap Semigroup.Option get
-@@ -858,7 +867,7 @@
+@@ -858,7 +871,7 @@
  ------------------------------------------------------------------------
  -- Typeable/Reflection
  

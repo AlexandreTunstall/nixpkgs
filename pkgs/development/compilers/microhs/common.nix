@@ -26,6 +26,7 @@ stdenv.mkDerivation {
   patches = [
     patches/install-cabaldir.patch
     patches/cpphs-fixes.patch
+    patches/fix-multiple-version.patch
     patches/lib/0001-Add-ioError-and-IOException.patch
     (if lib.versionOlder version "0.12"
       then patches/lib/0002-0.11-Add-mask-and-uninterruptibleMask.patch
@@ -50,6 +51,16 @@ stdenv.mkDerivation {
       then patches/lib/0017-0.11-Add-withBinaryFile.patch
       else patches/lib/0017-Add-withBinaryFile.patch)
     patches/lib/0018-Add-Bifunctor-tuple-instances.patch
+    patches/lib/0019-Use-Foldable-versions-for-Data.List-functions.patch
+    patches/lib/0020-Move-getAlt-into-the-Alt-definition.patch
+    patches/lib/0021-Remove-Char8-newtype-and-add-Char8-pack.patch
+    patches/lib/0022-Add-openBinaryTempFileWithDefaultPermissions.patch
+    patches/lib/0023-Add-renameFile.patch
+    patches/lib/0024-Add-unsafeDupablePerformIO.patch
+    patches/lib/0025-Add-atomicModifyIORef.patch
+    patches/lib/0026-Add-atomicWriteIORef.patch
+  ] ++ lib.optionals (lib.versionAtLeast version "0.12.2.0") [
+    patches/lib/0027-Add-fromForeignPtr.patch
   ] ++ lib.optionals (lib.versionAtLeast version "0.11.7.2") [
     (fetchpatch {
       name = "fix-mcabal-build.patch";

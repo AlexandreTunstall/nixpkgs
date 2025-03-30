@@ -1,0 +1,29 @@
+From ab817012a1c325c02911cabc30659bc093e5892b Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Sat, 29 Mar 2025 08:58:19 +0000
+Subject: [PATCH] Move getAlt into the Alt definition
+
+Some packages (e.g. binary) try to import Alt(getAlt).
+---
+ lib/Data/Monoid/Internal.hs | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/lib/Data/Monoid/Internal.hs b/lib/Data/Monoid/Internal.hs
+index 452d23b0..3377cc58 100644
+--- a/lib/Data/Monoid/Internal.hs
++++ b/lib/Data/Monoid/Internal.hs
+@@ -167,10 +167,8 @@ instance Ord a => Ord (Arg a b) where
+ 
+ ----------------------
+ 
+-newtype Alt f a = Alt (f a)
++newtype Alt f a = Alt { getAlt :: f a }
+ --  deriving (Show)
+-getAlt :: Alt f a -> f a
+-getAlt (Alt x) = x
+ {-
+   deriving ( Generic     -- ^ @since base-4.8.0.0
+            , Generic1    -- ^ @since base-4.8.0.0
+-- 
+2.47.2
+

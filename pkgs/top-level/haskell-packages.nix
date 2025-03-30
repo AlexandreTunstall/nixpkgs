@@ -80,7 +80,7 @@ in
     let
       bb = pkgsBuildBuild.haskell;
     in
-    {
+    rec {
       ghc865Binary = callPackage ../development/compilers/ghc/8.6.5-binary.nix {
         # Should be llvmPackages_6 which has been removed from nixpkgs
         llvmPackages = null;
@@ -96,6 +96,23 @@ in
 
       ghc963Binary = callPackage ../development/compilers/ghc/9.6.3-binary.nix {
         llvmPackages = pkgs.llvmPackages_15;
+      };
+
+      # Newer versions of GHC require DataKinds
+      ghc802-microhs = callPackage ../development/compilers/ghc/common-microhs.nix {
+        ghc-src = callPackage ../development/compilers/ghc/8.0.2.nix {
+          bootPkgs = bb.packages.ghc8107;
+          buildLlvmPackages = pkgs.llvmPackages;
+        };
+        microhs = packages.microhs-0_12_2_0;
+      };
+      #ghc802-microhs = callPackage ../development/compilers/ghc/8.0.2.nix {
+      #  bootPkgs = packages.microhs;
+      #};
+
+      ghc8107-microhs = callPackage ../development/compilers/ghc/common-microhs.nix {
+        ghc-src = ghc8107;
+        inherit (packages) microhs;
       };
 
       ghc8107 = callPackage ../development/compilers/ghc/8.10.7.nix {
@@ -545,7 +562,7 @@ in
         microhs-boot = bb.compiler.microhs-0_12_0_0;
       };
 
-      microhs = compiler.microhs-0_11_7_1;
+      microhs = compiler.microhs-0_12_2_0;
     };
 
   # Default overrides that are applied to all package sets.
@@ -795,5 +812,7 @@ in
         compilerConfig = callPackage ../development/haskell-modules/configuration-microhs.nix { };
         packageSetConfig = bootstrapPackageSet;
       };
+
+      microhs = packages.microhs-0_12_2_0;
     };
 }

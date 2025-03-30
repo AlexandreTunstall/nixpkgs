@@ -1,0 +1,42 @@
+From 992586495a430684975e49013c3a0926ff67f80e Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Sat, 29 Mar 2025 20:51:11 +0000
+Subject: [PATCH] Add renameFile
+
+---
+ lib/System/Directory.hs | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/lib/System/Directory.hs b/lib/System/Directory.hs
+index 26fda45a..d0329968 100644
+--- a/lib/System/Directory.hs
++++ b/lib/System/Directory.hs
+@@ -11,6 +11,7 @@ module System.Directory(
+   createDirectoryIfMissing,
+   copyFile,
+   getHomeDirectory,
++  renameFile,
+   ) where
+ import qualified Prelude(); import MiniPrelude
+ import Control.Exception(bracket)
+@@ -32,6 +33,7 @@ foreign import ccall "c_d_name" c_d_name   :: Ptr Dirent -> IO CString
+ foreign import ccall "chdir"    c_chdir    :: CString -> IO Int
+ foreign import ccall "mkdir"    c_mkdir    :: CString -> Int -> IO Int
+ foreign import ccall "getcwd"   c_getcwd   :: CString -> Int -> IO CString
++foreign import ccall "rename"   c_rename   :: CString -> CString -> IO Int
+ 
+ removeFile :: FilePath -> IO ()
+ removeFile fn = do
+@@ -129,3 +131,9 @@ getHomeDirectory =
+     return $ "C:/Users/" ++ user    -- it's a guess
+   else
+     getEnv "HOME"
++
++renameFile :: FilePath -> FilePath -> IO ()
++renameFile src dst = do
++  r <- withCAString src $ withCAString dst . c_rename
++  when (r /= 0) $
++    error $ "renameFile " ++ src ++ " " ++ dst
+-- 
+2.47.2
+

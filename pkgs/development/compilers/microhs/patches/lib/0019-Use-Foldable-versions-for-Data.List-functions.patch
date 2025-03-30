@@ -1,0 +1,364 @@
+From e47a2485c4e2e0b3c180967bfc5eecbe5b47fe3e Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Sat, 29 Mar 2025 08:36:49 +0000
+Subject: [PATCH] Use Foldable versions for Data.List functions
+
+---
+ lib/Control/Monad.hs          | 15 ++++----
+ lib/Control/Monad/Fail.hs     |  3 --
+ lib/Data/Foldable.hs          | 60 ++++++++++++++++++++---------
+ lib/Data/Foldable/Internal.hs |  8 +++-
+ lib/Data/List.hs              | 72 +++++++----------------------------
+ lib/Data/Maybe.hs             |  2 +-
+ lib/Text/Read/Lex.hs          |  4 +-
+ 7 files changed, 74 insertions(+), 90 deletions(-)
+
+diff --git a/lib/Control/Monad.hs b/lib/Control/Monad.hs
+index 6a6c3d28..1f088eb9 100644
+--- a/lib/Control/Monad.hs
++++ b/lib/Control/Monad.hs
+@@ -45,7 +45,7 @@ import Data.Bool
+ import Data.Char_Type
+ import Data.Function
+ import Data.Functor hiding(unzip)
+-import Data.List
++import Data.List_Type
+ import Data.Monoid.Internal
+ import Data.Ord
+ --import Data.Maybe
+@@ -131,6 +131,9 @@ filterM p (x : xs) = liftA2 (\ flg -> if flg then (x:) else id) (p x) (filterM p
+ -- XXX could relax some Monad to Applicative
+ mapAndUnzipM  :: forall m a b c . (Monad m) => (a -> m (b,c)) -> [a] -> m ([b], [c])
+ mapAndUnzipM f xs = unzip <$> mapM f xs
++  where
++    unzip [] = ([], [])
++    unzip ((x, y) : xys) = let (xs, ys) = unzip xys in (x : xs, y : ys)
+ 
+ zipWithM :: forall m a b c . (Monad m) => (a -> b -> m c) -> [a] -> [b] -> m [c]
+ zipWithM f xs ys = sequence (zipWith f xs ys)
+@@ -138,6 +141,9 @@ zipWithM f xs ys = sequence (zipWith f xs ys)
+ zipWithM_ :: forall m a b c . (Monad m) => (a -> b -> m c) -> [a] -> [b] -> m ()
+ zipWithM_ f xs ys = sequence_ (zipWith f xs ys)
+ 
++zipWith f (x:xs) (y:ys) = f x y : zipWith f xs ys
++zipWith _ _ _ = []
++
+ foldM :: forall m a b . (Monad m) => (b -> a -> m b) -> b -> [a] -> m b
+ foldM = foldlM
+ 
+@@ -206,9 +212,6 @@ instance Monad ((->) a) where
+ instance Monad Dual where
+   m >>= k = k (getDual m)
+ 
+-instance Monad [] where
+-  (>>=) = flip concatMap
+-
+ {-
+ -- Same for Maybe
+ instance Functor Maybe where
+@@ -230,10 +233,6 @@ class (Alternative m, Monad m) => MonadPlus m where
+   mplus :: forall a . m a -> m a -> m a
+   mplus = (<|>)
+ 
+-instance MonadPlus [] where
+-  mzero = []
+-  mplus = (++)
+-
+ msum :: forall m a . (MonadPlus m) => [m a] -> m a
+ msum [] = mzero
+ msum (ma:mas) = ma `mplus` msum mas
+diff --git a/lib/Control/Monad/Fail.hs b/lib/Control/Monad/Fail.hs
+index da6e5ff7..2690e343 100644
+--- a/lib/Control/Monad/Fail.hs
++++ b/lib/Control/Monad/Fail.hs
+@@ -10,6 +10,3 @@ import Data.List_Type
+ class Monad m => MonadFail m where
+   fail :: forall a . String -> m a
+   fail = error
+-
+-instance MonadFail [] where
+-  fail _ = []
+diff --git a/lib/Data/Foldable.hs b/lib/Data/Foldable.hs
+index 59e94e0b..45e7220c 100644
+--- a/lib/Data/Foldable.hs
++++ b/lib/Data/Foldable.hs
+@@ -54,7 +54,6 @@ import Data.Function
+ import Data.Functor.Const
+ import Data.Functor.Identity
+ import Data.List_Type hiding (concatMap)
+-import qualified Data.List as List
+ import Data.Maybe
+ import Data.Monoid
+ import Data.Monoid.Internal hiding (Max(..), Min(..))
+@@ -146,22 +145,49 @@ instance Foldable Maybe where
+     foldl f z (Just x) = f z x
+ 
+ instance Foldable [] where
+-    elem    = List.elem
+-    foldl   = List.foldl
+-    foldl'  = List.foldl'
+-    foldl1  = List.foldl1
+-    foldr   = List.foldr
+-    --foldr'  = List.foldr'
+-    foldr1  = List.foldr1
+-    foldMap = (mconcat .) . List.map
+-    fold    = mconcat
+-    length  = List.length
+-    maximum = List.maximum
+-    minimum = List.minimum
+-    null    = List.null
+-    product = List.product
+-    sum     = List.sum
+-    toList  = id
++    elem a = any (a ==)
++
++    foldl _ z [] = z
++    foldl f z (x : xs) = foldl f (f z x) xs
++
++    foldl' _ z [] = z
++    foldl' f z (x : xs) =
++      let y = f z x
++      in  y `seq` foldl' f y xs
++
++    foldl1 _ [] = error "foldl1: empty list"
++    foldl1 f (x : xs) = foldl f x xs
++
++    foldr _ z [] = z
++    foldr f z (x : xs) = f x (foldr f z xs)
++
++    foldr1 _ [] = error "foldr1: empty list"
++    foldr1 _ [x] = x
++    foldr1 f (x : xs) = f x (foldr1 f xs)
++
++    fold = mconcat
++
++    length =
++      -- Make it tail recursive and strict
++      let
++        rec r [] = r
++        rec r (_:xs) =
++              let r' = r + (1::Int)
++              in  r' `primSeq` rec r' xs
++      in rec (0::Int)
++
++    maximum [] = error "maximum: empty list"
++    maximum (x:ys) = foldr (\ y m -> if y > m then y else m) x ys
++
++    minimum [] = error "minimum: empty list"
++    minimum (x:ys) = foldr (\ y m -> if y < m then y else m) x ys
++
++    null [] = True
++    null _  = False
++
++    product = foldr (*) 1
++    sum = foldr (+) 0
++    toList = id
+ 
+ instance Foldable (Either a) where
+     foldMap _ (Left _) = mempty
+diff --git a/lib/Data/Foldable/Internal.hs b/lib/Data/Foldable/Internal.hs
+index 8703de88..ab36dede 100644
+--- a/lib/Data/Foldable/Internal.hs
++++ b/lib/Data/Foldable/Internal.hs
+@@ -7,7 +7,7 @@ import Data.Function
+ import Data.Functor
+ import Data.Maybe_Type
+ import Data.Monoid.Internal hiding (Max(..), Min(..))
+-import Data.List
++import Data.List_Type
+ import Data.Ord
+ 
+ newtype Max a = Max (Maybe a)
+@@ -40,6 +40,12 @@ instance forall a . Ord a => Monoid (Min a) where
+     mempty = Min Nothing
+     mconcat = foldl' (<>) mempty
+ 
++foldl' :: forall a b . (b -> a -> b) -> b -> [a] -> b
++foldl' _ z [] = z
++foldl' f z (x : xs) =
++  let y = f z x
++  in  y `seq` foldl' f y xs
++
+ newtype StateL s a = StateL (s -> (s, a))
+ runStateL :: StateL s a -> s -> (s, a)
+ runStateL (StateL f) = f
+diff --git a/lib/Data/List.hs b/lib/Data/List.hs
+index a406d3fc..ce22bf79 100644
+--- a/lib/Data/List.hs
++++ b/lib/Data/List.hs
+@@ -31,14 +31,17 @@ import qualified Prelude()              -- do not import Prelude
+ import Primitives
+ import Control.Applicative
+ import Control.Error
++import Control.Monad
++import Control.Monad.Fail
+ import Data.Bool
+ import Data.Char
+ import Data.Eq
++import Data.Foldable
+ import Data.Function
+ import Data.Functor hiding(unzip)
+ import Data.Int
+ import Data.Integral
+-import Data.List_Type
++import Data.List_Type hiding(concatMap)
+ import Data.Maybe_Type
+ import Data.Monoid.Internal
+ import Data.Num
+@@ -70,6 +73,16 @@ instance Applicative [] where
+   xs *> ys = concatMap (\_ -> ys) xs
+   liftA2 f xs ys = concatMap (\x -> map (f x) ys) xs
+ 
++instance Monad [] where
++  (>>=) = flip concatMap
++
++instance MonadFail [] where
++  fail _ = []
++
++instance MonadPlus [] where
++  mzero = []
++  mplus = (++)
++
+ instance Show a => Show [a] where
+   showsPrec _ = showList
+ 
+@@ -90,10 +103,6 @@ instance Monoid [a] where
+   mempty = []
+   mconcat = concat
+ 
+-null :: forall a . [a] -> Bool
+-null [] = True
+-null _  = False
+-
+ concat :: forall a . [[a]] -> [a]
+ concat = foldr (++) []
+ 
+@@ -105,21 +114,12 @@ filter :: forall a . (a -> Bool) -> [a] -> [a]
+ filter _ [] = []
+ filter p (x : xs) = if p x then x : filter p xs else filter p xs
+ 
+-foldr :: forall a b . (a -> b -> b) -> b -> [a] -> b
+-foldr _ z [] = z
+-foldr f z (x : xs) = f x (foldr f z xs)
+-
+ foldr' :: forall a b . (a -> b -> b) -> b -> [a] -> b
+ foldr' f z [] = z
+ foldr' f z (x:xs) =
+   let y = foldr' f z xs
+   in  y `seq` f x y
+ 
+-foldr1 :: forall a . (a -> a -> a) -> [a] -> a
+-foldr1 _ [] = error "foldr1: empty list"
+-foldr1 _ [x] = x
+-foldr1 f (x : xs) = f x (foldr1 f xs)
+-
+ foldr1' :: forall a . (a -> a -> a) -> [a] -> a
+ foldr1' f [] = error "foldr1: empty list"
+ foldr1' _ [x] = x
+@@ -127,38 +127,10 @@ foldr1' f (x : xs) =
+   let y = foldr1' f xs
+   in  y `seq` f x y
+ 
+-foldl :: forall a b . (b -> a -> b) -> b -> [a] -> b
+-foldl _ z [] = z
+-foldl f z (x : xs) = foldl f (f z x) xs
+-
+-foldl' :: forall a b . (b -> a -> b) -> b -> [a] -> b
+-foldl' _ z [] = z
+-foldl' f z (x : xs) =
+-  let y = f z x
+-  in  y `seq` foldl' f y xs
+-
+-foldl1 :: forall a . (a -> a -> a) -> [a] -> a
+-foldl1 _ [] = error "foldl1: empty list"
+-foldl1 f (x : xs) = foldl f x xs
+-
+ foldl1' :: forall a . (a -> a -> a) -> [a] -> a
+ foldl1' _ [] = error "foldl1': empty list"
+ foldl1' f (x : xs) = foldl' f x xs
+ 
+-minimum :: forall a . Ord a => [a] -> a
+-minimum [] = error "minimum: empty list"
+-minimum (x:ys) = foldr (\ y m -> if y < m then y else m) x ys
+-
+-maximum :: forall a . Ord a => [a] -> a
+-maximum [] = error "maximum: empty list"
+-maximum (x:ys) = foldr (\ y m -> if y > m then y else m) x ys
+-
+-sum :: forall a . Num a => [a] -> a
+-sum = foldr (+) 0
+-
+-product :: forall a . Num a => [a] -> a
+-product = foldr (*) 1
+-
+ and :: [Bool] -> Bool
+ and = foldr (&&) True
+ 
+@@ -189,16 +161,6 @@ drop n arg =
+       [] -> []
+       _ : xs -> drop (n - (1::Int)) xs
+ 
+-length :: forall a . [a] -> Int
+-length =
+-  -- Make it tail recursive and strict
+-  let
+-    rec r [] = r
+-    rec r (_:xs) =
+-          let r' = r + (1::Int)
+-          in  r' `primSeq` rec r' xs
+-  in rec (0::Int)
+-
+ zip :: forall a b . [a] -> [b] -> [(a, b)]
+ zip = zipWith (\ x y -> (x, y))
+ 
+@@ -411,12 +373,6 @@ intersperse sep (a:as) = a : prepend as
+ intercalate :: forall a . [a] -> [[a]] -> [a]
+ intercalate xs xss = concat (intersperse xs xss)
+ 
+-elem :: forall a . (Eq a) => a -> [a] -> Bool
+-elem a = any (a ==)
+-
+-notElem :: forall a . (Eq a) => a -> [a] -> Bool
+-notElem a as = not (elem a as)
+-
+ find :: forall a . (a -> Bool) -> [a] -> Maybe a
+ find p [] = Nothing
+ find p (x:xs) = if p x then Just x else find p xs
+diff --git a/lib/Data/Maybe.hs b/lib/Data/Maybe.hs
+index 1eba9c2e..819b1d98 100644
+--- a/lib/Data/Maybe.hs
++++ b/lib/Data/Maybe.hs
+@@ -13,7 +13,7 @@ import Data.Eq
+ import Data.Function
+ import Data.Functor
+ import Data.Int
+-import Data.List
++import Data.List_Type
+ import Data.Maybe_Type
+ import Data.Monoid.Internal
+ import Data.Ord
+diff --git a/lib/Text/Read/Lex.hs b/lib/Text/Read/Lex.hs
+index de6cd912..439b52b2 100644
+--- a/lib/Text/Read/Lex.hs
++++ b/lib/Text/Read/Lex.hs
+@@ -211,7 +211,7 @@ lexPunc =
+ 
+ -- | The @special@ character class as defined in the Haskell Report.
+ isPuncChar :: Char -> Bool
+-isPuncChar c = c `elem` ",;()[]{}`"
++isPuncChar c = c `elem` (",;()[]{}`"::String)
+ 
+ -- ----------------------------------------------------------------------
+ -- Symbols
+@@ -251,7 +251,7 @@ lexId = do c <- satisfy isIdsChar
+   where
+           -- Identifiers can start with a '_'
+     isIdsChar c = isAlpha c || c == '_'
+-    isIdfChar c = isAlphaNum c || c `elem` "_'"
++    isIdfChar c = isAlphaNum c || c `elem` ("_'"::String)
+ 
+ -- ---------------------------------------------------------------------------
+ -- Lexing character literals
+-- 
+2.47.2
+

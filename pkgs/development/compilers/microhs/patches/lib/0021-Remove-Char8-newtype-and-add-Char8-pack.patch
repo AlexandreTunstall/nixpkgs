@@ -1,0 +1,33 @@
+From 0b65e5ff2e8e8de1d98b7e4df5ee6cd42a052b75 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Sat, 29 Mar 2025 20:13:00 +0000
+Subject: [PATCH] Remove Char8 newtype and add Char8 pack
+
+---
+ lib/Data/ByteString/Char8.hs | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/lib/Data/ByteString/Char8.hs b/lib/Data/ByteString/Char8.hs
+index af3916b6..b29198ab 100644
+--- a/lib/Data/ByteString/Char8.hs
++++ b/lib/Data/ByteString/Char8.hs
+@@ -1,4 +1,5 @@
+ module Data.ByteString.Char8(module Data.ByteString.Char8) where
++import Data.ByteString (ByteString)
+ import qualified Data.ByteString as B
+ import Data.Coerce
+ import Data.List.NonEmpty
+@@ -6,8 +7,8 @@ import Data.Word(Word8)
+ import Foreign.C.String(CString, CStringLen)
+ import System.IO(Handle)
+ 
+-newtype ByteString = BS B.ByteString
+-  deriving (Eq, Ord)
++pack :: [Char] -> ByteString
++pack = coerce B.pack
+ 
+ fromFilePath :: FilePath -> IO ByteString
+ fromFilePath = coerce B.fromFilePath
+-- 
+2.47.2
+

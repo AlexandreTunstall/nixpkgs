@@ -1,0 +1,34 @@
+From 2ece886554050601367678b7f7838b36529b2a84 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Sun, 30 Mar 2025 09:53:24 +0100
+Subject: [PATCH] Add atomicModifyIORef
+
+---
+ lib/Data/IORef.hs | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/lib/Data/IORef.hs b/lib/Data/IORef.hs
+index 45969dd7..b402fea8 100644
+--- a/lib/Data/IORef.hs
++++ b/lib/Data/IORef.hs
+@@ -4,6 +4,7 @@ module Data.IORef(
+   readIORef,
+   writeIORef,
+   modifyIORef,
++  atomicModifyIORef',
+   ) where
+ import qualified Prelude()              -- do not import Prelude
+ import Primitives
+@@ -28,3 +29,9 @@ writeIORef (R p) a = primArrWrite p 0 a
+ 
+ modifyIORef :: forall a . IORef a -> (a -> a) -> IO ()
+ modifyIORef (R p) f = primArrRead p 0 `primBind` \ a -> primArrWrite p 0 (f a)
++
++-- XXX Neither atomic nor strict
++atomicModifyIORef, atomicModifyIORef' :: IORef a -> (a -> (a, b)) -> IO b
++atomicModifyIORef (R p) f = primArrRead p 0 `primBind` \a
++  -> let (a', b) = f a in primArrWrite p 0 a' `primBind` \_ -> primReturn b
++atomicModifyIORef' = atomicModifyIORef
+-- 
+2.47.2
+

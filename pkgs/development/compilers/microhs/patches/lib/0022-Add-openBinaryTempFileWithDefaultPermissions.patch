@@ -1,0 +1,35 @@
+From 59b5de81d23750e6c0407e32438f8913426291a7 Mon Sep 17 00:00:00 2001
+From: Alex Tunstall <alex@tunstall.xyz>
+Date: Sat, 29 Mar 2025 20:33:08 +0000
+Subject: [PATCH] Add openBinaryTempFileWithDefaultPermissions
+
+---
+ lib/System/IO.hs | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/lib/System/IO.hs b/lib/System/IO.hs
+index d68dcae3..1e472275 100644
+--- a/lib/System/IO.hs
++++ b/lib/System/IO.hs
+@@ -22,6 +22,7 @@ module System.IO(
+   mkTextEncoding, hSetEncoding, utf8,
+ 
+   openTmpFile, openTempFile, openBinaryTempFile,
++  openBinaryTempFileWithDefaultPermissions,
+ 
+   withFile, withBinaryFile,
+ 
+@@ -339,6 +340,10 @@ openTempFile = openTempFile' openFile
+ openBinaryTempFile :: FilePath -> String -> IO (String, Handle)
+ openBinaryTempFile = openTempFile' openBinaryFile
+ 
++openBinaryTempFileWithDefaultPermissions
++  :: FilePath -> String -> IO (String, Handle)
++openBinaryTempFileWithDefaultPermissions = openBinaryTempFile
++
+ data BufferMode = NoBuffering | LineBuffering | BlockBuffering (Maybe Int)
+   deriving (Eq, Ord, Show)
+ 
+-- 
+2.47.2
+
