@@ -1,3 +1,28 @@
+diff --git a/compiler/basicTypes/Unique.hs b/compiler/basicTypes/Unique.hs
+index 0a4d1bde7d..da5d3af067 100644
+--- a/compiler/basicTypes/Unique.hs
++++ b/compiler/basicTypes/Unique.hs
+@@ -63,16 +63,20 @@ module Unique (
+         mkPseudoUniqueH
+     ) where
+ 
++#if !defined(__MHS__)
+ #include "HsVersions.h"
+ #include "Unique.h"
++#endif
+ 
+ import BasicTypes
+ import FastString
+ import Outputable
+ import Util
+ 
++#if !defined(__MHS__)
+ -- just for implementing a fast [0,61) -> Char function
+ import GHC.Exts (indexCharOffAddr#, Char(..), Int(..))
++#endif
+ 
+ import Data.Char        ( chr, ord )
+ import Data.Bits
 diff --git a/compiler/ghc.cabal.in b/compiler/ghc.cabal.in
 index e0aee80540..c02d30957a 100644
 --- a/compiler/ghc.cabal.in
@@ -241,7 +266,7 @@ index 4cde1216ed..84fe156a92 100644
 +writeFastMutInt = writeIORef
 +#endif
 diff --git a/compiler/utils/FastString.hs b/compiler/utils/FastString.hs
-index 6e692f25a1..f06d4375bd 100644
+index 6e692f25a1..470965aad8 100644
 --- a/compiler/utils/FastString.hs
 +++ b/compiler/utils/FastString.hs
 @@ -28,67 +28,71 @@
@@ -287,9 +312,8 @@ index 6e692f25a1..f06d4375bd 100644
 +#endif
  
          -- ** Deconstruction
--        unpackFS,           -- :: FastString -> String
+         unpackFS,           -- :: FastString -> String
 -        bytesFS,            -- :: FastString -> [Word8]
-+        -- unpackFS,           -- :: FastString -> String
 +        -- bytesFS,            -- :: FastString -> [Word8]
  
          -- ** Encoding
@@ -374,7 +398,7 @@ index 6e692f25a1..f06d4375bd 100644
  
  #if __GLASGOW_HASKELL__ >= 709
  import Foreign
-@@ -610,3 +618,26 @@ fsLit x = mkFastString x
+@@ -610,3 +618,29 @@ fsLit x = mkFastString x
      forall x . sLit  (unpackCString# x) = mkLitString#  x #-}
  {-# RULES "fslit"
      forall x . fsLit (unpackCString# x) = mkFastString# x #-}
@@ -382,6 +406,9 @@ index 6e692f25a1..f06d4375bd 100644
 +type FastString = String
 +type FastZString = String
 +type LitString = String
++
++unpackFS :: FastString -> String
++unpackFS = id
 +--data FastStringTable = FastStringTable !(IORef Int) [IORef (IORef [FastString])]
 +--
 +--string_table :: FastStringTable
@@ -402,7 +429,7 @@ index 6e692f25a1..f06d4375bd 100644
 +--hashStr _ _ = 0
 +#endif
 diff --git a/compiler/utils/Outputable.hs b/compiler/utils/Outputable.hs
-index 3a2d8be615..302a09f3b8 100644
+index 3a2d8be615..824650b630 100644
 --- a/compiler/utils/Outputable.hs
 +++ b/compiler/utils/Outputable.hs
 @@ -90,12 +90,15 @@ import {-# SOURCE #-}   OccName( OccName )
@@ -501,6 +528,18 @@ index 3a2d8be615..302a09f3b8 100644
  
  {-
  ************************************************************************
+@@ -875,6 +892,11 @@ pprHsBytes bs = let escaped = concatMap escape $ BS.unpack bs
+                         then [c]
+                         else '\\' : show w
+ 
++#if defined(__MHS__)
++showMultiLineString :: String -> [String]
++showMultiLineString str = [show str]
++#endif
++
+ -- Postfix modifiers for unboxed literals.
+ -- See Note [Printing of literals in Core] in `basicTypes/Literal.hs`.
+ primCharSuffix, primFloatSuffix, primIntSuffix :: SDoc
 diff --git a/compiler/utils/Panic.hs b/compiler/utils/Panic.hs
 index b19c770718..793793bb70 100644
 --- a/compiler/utils/Panic.hs

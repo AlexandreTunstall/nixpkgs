@@ -43,6 +43,7 @@ self: super:
   Cabal = self.Cabal_3_14_0_0;
   Cabal-syntax = self.Cabal-syntax_3_14_0_0;
   containers = appendPatches [
+    # These patches can be dropped when switching to 0.8
     (pkgs.fetchpatch {
       url = "https://github.com/haskell/containers/commit/6a6c007dc699aa0b354285a39420977efaf48328.patch";
       name = "refactor-intset-bitmasks.patch";
@@ -55,6 +56,25 @@ self: super:
       relative = "containers";
       excludes = [ "changelog.md" ];
       hash = "sha256-YphTuOsV6D/nWY8Rl9dHMex11qxN50bWuXmPqzHycEg=";
+    })
+    (pkgs.fetchpatch {
+      url = "https://github.com/haskell/containers/commit/2776ace66dd0b23de2dcd37c99da951b36e543c7.patch";
+      name = "microhs-enable-patsyn.patch";
+      relative = "containers";
+      excludes = [ ".github" ];
+      hash = "sha256-wqpQu5sPcR2AsRkg3PwnIL4VTaIv7i/Q2YUyS3B4aBk=";
+    })
+    (pkgs.fetchpatch {
+      url = "https://github.com/haskell/containers/commit/8d52e0d96d0615613438af2dc0f623ffe2464c9f.patch";
+      name = "guard-cyclicscc-with-cpp.patch";
+      relative = "containers";
+      hash = "sha256-zoMKOgGY7e16eExvb7/VN/Ri5moSPD7xxF6U+fndNvQ=";
+    })
+    (pkgs.fetchpatch {
+      url = "https://github.com/haskell/containers/commit/2859d4682a79e5fe85211ea194c11e3cc80ca7b9.patch";
+      name = "guard-cyclicscc-with-define.patch";
+      relative = "containers";
+      hash = "sha256-4klFp+hpc9B70ao+87CIOTtLk03pIbxY/c/XeLVhOhU=";
     })
   ] self.containers_0_7;
   #deepseq = self.deepseq_1_5_1_0;
