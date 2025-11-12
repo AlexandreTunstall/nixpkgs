@@ -220,15 +220,27 @@ in
       # with "native" and "gmp" backends.
       native-bignum =
         let
-          nativeBignumGhcNames = pkgs.lib.filter (name: !(builtins.elem name nativeBignumExcludes)) (
-            pkgs.lib.attrNames compiler
-          );
+          isNativeBignumGhc =
+            name:
+            !(builtins.elem name nativeBignumExcludes) && !(compiler.${name} ? isMhs && compiler.${name}.isMhs);
+          nativeBignumGhcNames = pkgs.lib.filter isNativeBignumGhc (pkgs.lib.attrNames compiler);
         in
         pkgs.lib.recurseIntoAttrs (
           pkgs.lib.genAttrs nativeBignumGhcNames (
             name: compiler.${name}.override { enableNativeBignum = true; }
           )
         );
+
+      microhs-boot = callPackage ../development/compilers/microhs/boot.nix {
+        microhs-src = bb.compiler.microhs_0_15_4_0;
+      };
+
+      microhs_0_15_4_0 = callPackage ../development/compilers/microhs/0.15.4.0.nix {
+        inherit (bb.compiler) microhs-boot;
+      };
+
+      microhs_0_15 = compiler.microhs_0_15_4_0;
+      microhs = compiler.microhs_0_15;
     }
     // chooseDefaultVersions compiler
     // pkgs.lib.optionalAttrs config.allowAliases {
@@ -332,6 +344,16 @@ in
             buildHaskellPackages = bh.packages.native-bignum.${name};
           }
         );
+
+      microhs_0_15_4_0 = callPackage ../development/haskell-modules {
+        buildHaskellPackages = bh.packages.microhs_0_15_4_0;
+        ghc = bh.compiler.microhs_0_15_4_0;
+        compilerConfig = callPackage ../development/haskell-modules/configuration-microhs.nix { };
+        packageSetConfig = bootstrapPackageSet;
+      };
+
+      microhs_0_15 = packages.microhs_0_15_4_0;
+      microhs = packages.microhs_0_15;
     }
     // chooseDefaultVersions packages
     // pkgs.lib.optionalAttrs config.allowAliases {
