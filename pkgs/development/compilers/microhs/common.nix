@@ -1,6 +1,6 @@
 {
   version,
-  mcabalVersion ? "0.5.3.0-31f1b5dec81561a1b1d36b8e3065ce091dce2ec6",
+  mcabalVersion ? "0.5.8.0-4568cc27378c95585617ba1ec96cbf0ab71fd688",
   rev ? "refs/tags/v${version}",
   hash,
 }:

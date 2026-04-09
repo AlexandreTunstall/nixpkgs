@@ -24,12 +24,6 @@ stdenv.mkDerivation {
 
   patches = [
     (fetchpatch {
-      # https://github.com/augustss/MicroCabal/pull/23
-      name = "remove-mtl-mhs-override.patch";
-      url = "https://github.com/AlexandreTunstall/MicroCabal/commit/ad30461aaf3dd295f4f5cf5db12635e42557cbfa.patch";
-      hash = "sha256-Gmlt76C19ZtCHpKyNim0ggtjXnVuq5F0ywvX8BW15uM=";
-    })
-    (fetchpatch {
       # https://github.com/augustss/MicroCabal/pull/34
       name = "package-install-path.patch";
       url = "https://github.com/augustss/MicroCabal/commit/dc358bbab312e1788564fbb36f835347c21792c0.patch";
