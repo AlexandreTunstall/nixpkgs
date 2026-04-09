@@ -35,7 +35,7 @@ self: super: {
   };
 
   # hackage-packages does not include GHC core libraries
-  binary = self.binary_0_8_9_3;
+  binary = markBroken self.binary_0_8_9_3;
   Cabal = self.Cabal_3_16_1_0;
   Cabal-syntax = self.Cabal-syntax_3_16_1_0;
   containers = self.containers_0_8;
@@ -51,13 +51,13 @@ self: super: {
   ghc-prim = null;
   ghci = null;
   haskeline = self.haskeline_0_8_4_1;
-  hpc = self.hpc_0_7_0_2;
-  integer-gmp = self.integer-gmp_1_1;
+  hpc = markBroken self.hpc_0_7_0_2;
+  integer-gmp = markBroken self.integer-gmp_1_1;
   libiserv = null;
   mtl = self.mtl_2_3_2;
   os-string = self.os-string_2_0_10;
   parsec = self.parsec_3_1_18_0;
-  pretty = self.pretty_1_1_3_6;
+  pretty = markBroken self.pretty_1_1_3_6;
   rts = null;
   semaphore-compat = null;
   stm = null;
@@ -66,6 +66,6 @@ self: super: {
   terminfo = self.terminfo_0_4_1_7;
   time = self.time_1_15;
   transformers = self.transformers_0_6_3_0;
-  unix = self.unix_2_8_8_0;
-  xhtml = self.xhtml_3000_4_0_0;
+  unix = markBroken self.unix_2_8_8_0;
+  xhtml = markBroken self.xhtml_3000_4_0_0;
 }
